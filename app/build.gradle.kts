@@ -28,6 +28,7 @@ android {
         applicationId = "com.whpupocket.app"
         minSdk = 31
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 99
         // 版本号不带 -P6 那种阶段后缀（阶段划分是 docs 的事）；预发行用标准 rc 标记（如 0.33.0-rc1），
         // AppUpdate.compareVersions 对它有专门规则：rc < 同号正式版，正式版发布后已装 rc 的用户能看到红点。
@@ -133,4 +134,6 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

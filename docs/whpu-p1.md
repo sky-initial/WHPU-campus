@@ -10,7 +10,7 @@
 | P1.2 | 应用名称、applicationId、W 字标及未接入业务入口隔离，保留 MIT 版权 | 校园品牌资源可后续完善 |
 | P1.3 | WHPU Provider、周次与课程解析、内存 CookieJar、Mock 数据及本地 HTTP 测试 | 真实 JSON 字段与学校会话 |
 | P1.4 | Compose 周课表、今日页、实验课、实践安排缓存及自定义日程 | 当前 OPPO 主题下的小组件放置与跳转 |
-| P1.5 | Debug APK、单元测试、真机测试记录 | 专用 Room 自动化回归测试尚未补齐 |
+| P1.5 | Debug APK、单元测试、真机测试记录和 Room 设备回归用例 | 小组件主题兼容性仍待验证 |
 
 实际工程使用单模块和手动依赖容器 AppGraph。本阶段复用既有 Repository、Room 实体和 Compose 网格，新增 WHPU Provider 与映射逻辑。
 
@@ -32,7 +32,7 @@
 - 用脱敏的真实响应核对节次、单双周及实践课字段。已知学期映射仅为 2026—2027 第一学期的 `xnm=2026`、`xqm=3`。
 - P1.6 需确认学校授权登录方式、CAS/Rump 到教务会话的交接、会话失效和退出流程，以及校历、作息和其他学期代码。
 - 真实 Provider 已提供 Repository 写入入口，需要学校授权的会话和学期记录后才能接入界面。不同数据源使用不同的本地学期 ID。
-- 完善网络异常及 Room 缓存回归测试，并用真实脱敏样本核对实践安排字段。
+- 用真实脱敏样本核对实践安排字段，并验证学校实际响应下的网络与会话行为。
 
 ## 2026-11-07 真机测试
 
@@ -77,3 +77,25 @@
 4. 学校校历、上课作息及其他学期代码。当前登记的学期映射只有 2026—2027 第一学期。
 
 真实响应样本目前尚未提供。下一轮先验证脱敏样本，再依据已确认的认证流程实现 P1.6。
+
+## 缓存设备回归测试
+
+通过 `gradlew.bat :app:connectedDebugAndroidTest` 在已连接设备上运行 `WhpuCacheTest`。
+
+项目已设置 `android.injected.androidTest.leaveApksInstalledAfterRun=true`，保留设备测试结束后的应用安装和数据。本轮首次使用 Gradle 标准设备测试时，其默认清理行为卸载了应用；用户确认没有个人数据或设置，应用已回装，演示数据已重建。
+
+启用该配置后，标准 Gradle 命令再次通过全部 9 项测试。测试前写入的临时标记和应用数据库在测试后均保留，标记已移除；所有临时测试数据库均已清理。
+
+测试为每个用例建立独立命名的临时 Room 数据库，结束后关闭并删除该测试数据库。用例通过真实 SQLite 验证数据库重开、请求失败保留旧缓存、事务回滚、有效空课表、自定义日程保护、数据源隔离和并发快照一致性。
+
+测试依赖只加入 androidTest 配置，使用 AndroidJUnitRunner，原应用依赖版本保持现有设置。运行器配置参考 [Android 官方设备测试说明](https://developer.android.com/training/testing/instrumented-tests/androidx-test-libraries/runner)。
+
+首轮设备测试复现了清理缓存后实践安排残留的问题。修复后清理同时移除指定来源、指定学期的课程、实践安排和同步记录，保留其他学期及自定义日程。错误来源的清理请求会在写入前拒绝。
+
+修复后 9 项 Room 真机测试全部通过，原有 379 项本地单元测试通过，应用及测试 APK 构建成功。设备测试覆盖数据库关闭重开、请求失败、事务末尾写入失败回滚、成功刷新、有效空课表、错误来源写入与清理、跨学期清理隔离和并发快照一致性。
+
+手机若弹出测试 APK 的安装确认，需要通过系统软件包安装程序完成安装。也可先运行 `:app:assembleDebug :app:assembleDebugAndroidTest`，再用 ADB 安装两个 APK，并执行以下测试命令。
+
+```text
+adb shell am instrument -w -r -e class com.zzupocket.app.data.whpu.WhpuCacheTest com.whpupocket.app.test/androidx.test.runner.AndroidJUnitRunner
+```
