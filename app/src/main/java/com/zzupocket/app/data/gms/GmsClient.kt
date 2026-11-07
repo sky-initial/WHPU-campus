@@ -344,6 +344,7 @@ class GmsClient(
 
         /** 独立 OkHttp client：跟重定向（CAS 登录链靠 302）+ 会话 CookieJar + 与 HttpClients 同一套超时 */
         fun newClient(jar: CookieJar = InMemoryCookieJar()): OkHttpClient = OkHttpClient.Builder()
+            .addInterceptor { throw java.io.IOException("该校园服务暂未接入") }
             .followRedirects(true)
             .cookieJar(jar)
             .connectTimeout(15, TimeUnit.SECONDS)

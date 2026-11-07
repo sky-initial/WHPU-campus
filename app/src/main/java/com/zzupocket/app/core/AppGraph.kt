@@ -141,6 +141,13 @@ object AppGraph {
         ScheduleRepository(db, easClient, authRepository)
     }
 
+    val whpuSessionManager by lazy { com.zzupocket.app.data.whpu.WhpuSessionManager() }
+    val whpuAcademicRepository by lazy {
+        com.zzupocket.app.data.whpu.WhpuAcademicRepository(
+            com.zzupocket.app.data.whpu.WhpuAcademicProvider(whpuSessionManager), scheduleRepository,
+        )
+    }
+
     val focusRepository: FocusRepository by lazy { FocusRepository(db) }
 
     val cardRepository: CardRepository by lazy {

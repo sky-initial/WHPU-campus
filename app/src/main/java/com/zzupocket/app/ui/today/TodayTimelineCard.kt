@@ -95,6 +95,7 @@ class TodayTimelineViewModel : ViewModel() {
     }
 
     private suspend fun load() {
+        scheduleRepo.ensureDemoTimetable()
         val now = System.currentTimeMillis()
         val nowMin = LocalTime.now().let { it.hour * 60 + it.minute }
         val today = LocalDate.now()

@@ -159,6 +159,21 @@ fun ScheduleScreen(
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            if (state.selectedSemester?.id == com.zzupocket.app.data.whpu.WhpuScheduleMapper.DEMO_SEMESTER_ID) {
+                Text(
+                    text = "演示课表 · 课程、校区、日期和作息均为示例",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            state.practiceCourses.forEach { practice ->
+                val weeks = practice.weeks.sorted().joinToString("、")
+                Text(
+                    text = "实践安排：${practice.name ?: "未命名"}" + if (weeks.isEmpty()) "" else " · 第${weeks}周",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                )
+            }
             // 研究生账号在本科教务里本来就没有角色：那条 401/403 说明对他是噪音，
             // 而且与下面的「研究生课表」区块自相矛盾（一边说没权限、一边请他登录研究生系统）。
             // 切到研究生视图后不再显示这条错误；研究生链路的错误由 grad 区块自己的 gmsError 负责。
