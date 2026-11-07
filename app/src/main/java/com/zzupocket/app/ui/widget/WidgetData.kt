@@ -115,6 +115,7 @@ object WidgetData {
 
     suspend fun loadSchedule(): WidgetScheduleBundle {
         val repo = AppGraph.scheduleRepository
+        repo.ensureDemoTimetable()
         val prefsStore = AppGraph.uiPrefsStore
         val today = LocalDate.now()
         val tomorrow = today.plusDays(1)

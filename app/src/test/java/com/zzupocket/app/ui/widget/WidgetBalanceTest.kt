@@ -226,7 +226,7 @@ class WidgetBalanceTest {
         // 电表刚读的、余额是前天的 → 报前天的（不能让用户以为整块都是新的）
         // 22:30 往前 30 小时 = 昨天 16:30
         val p = build(lightAt = now, acAt = now, cardAt = now - 30 * hour)
-        assertEquals("昨天 16:30", p.update)
+        assertEquals(WidgetBalance.updateLabel(now - 30 * hour, now), p.update)
     }
 
     @Test

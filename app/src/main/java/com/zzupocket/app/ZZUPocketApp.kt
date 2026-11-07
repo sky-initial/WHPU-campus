@@ -18,7 +18,7 @@ class ZZUPocketApp : Application() {
         AppGraph.pomodoroNotifications.ensureChannels()
 
         // 电量定时采样：学校不给历史用电量，只能靠按点采样差分算（尽力而为）
-        EnergySamplingWorker.schedule(this)
+        EnergySamplingWorker.cancel(this)
 
         // 番茄钟可能在上一轮进程里就被杀了 —— 启动时把状态接回来。
         // 剩余时间是用墙钟算的，所以"接回来"之后不用做任何补偿。

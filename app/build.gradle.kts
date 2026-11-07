@@ -25,7 +25,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.zzupocket.app"
+        applicationId = "com.whpupocket.app"
         minSdk = 31
         targetSdk = 36
         versionCode = 99

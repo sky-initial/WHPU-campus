@@ -78,6 +78,7 @@ object HttpClients {
     }
 
     private fun builder(minIntervalMs: Long) = OkHttpClient.Builder()
+        .addInterceptor { throw java.io.IOException("该校园服务暂未接入") }
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)

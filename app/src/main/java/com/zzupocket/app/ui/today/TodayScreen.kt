@@ -100,7 +100,7 @@ fun TodayScreen(
                 title = { Text("今天") },
                 actions = {
                     IconButton(onClick = onOpenDiagnostics) {
-                        Icon(Icons.Filled.MoreHoriz, contentDescription = "登录状态")
+                        Icon(Icons.Filled.MoreHoriz, contentDescription = "服务接入状态")
                     }
                 },
             )
@@ -119,9 +119,7 @@ fun TodayScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            if (!state.loggedIn && state.light.kwh == null && state.ac.kwh == null) {
-                LoginPromptCard(onOpenLogin)
-            }
+            DemoPromptCard(onOpenSchedule)
 
             // ① 今天的时间轴：上课 / 已完成的专注（课间空档不画，见 TodayTimelineCard 的注释）
             TodayTimelineCard(state = timeline, onOpenSchedule = onOpenSchedule)
@@ -136,26 +134,31 @@ fun TodayScreen(
             LibraryEntryCard(
                 icon = Icons.Filled.LocalLibrary,
                 title = "图书馆 · 座位预约",
-                subtitle = "学校原版网页",
+                subtitle = "暂未接入",
                 onOpen = onOpenLibrary,
             )
             LibraryEntryCard(
                 icon = Icons.Filled.MeetingRoom,
                 title = "空教室查询",
-                subtitle = "按楼看每间教室哪节有课",
+                subtitle = "暂未接入",
                 onOpen = onOpenRooms,
             )
 
             // ③ 宿舍电量（底部带"近 7 天"摘要行，完整的趋势图在电费页）
-            ElectricityCard(
-                state = state,
-                onRefresh = vm::refresh,
-                onOpenLogin = onOpenLogin,
+            LibraryEntryCard(
+                icon = Icons.Filled.Bolt,
+                title = "宿舍电费",
+                subtitle = "暂未接入",
                 onOpen = onOpenElectricity,
             )
 
             // ④ 校园卡：余额 + 今日消费
-            TodayCardBalanceCard(state = card, onOpen = onOpenCard)
+            LibraryEntryCard(
+                icon = Icons.Filled.MoreHoriz,
+                title = "校园卡",
+                subtitle = "暂未接入",
+                onOpen = onOpenCard,
+            )
 
             Spacer(Modifier.height(4.dp))
         }
@@ -163,7 +166,7 @@ fun TodayScreen(
 }
 
 @Composable
-private fun LoginPromptCard(onOpenLogin: () -> Unit) {
+private fun DemoPromptCard(onOpenSchedule: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -171,12 +174,10 @@ private fun LoginPromptCard(onOpenLogin: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("未登录", style = MaterialTheme.typography.titleMedium)
-            Text("登录后可以查看电费、校园卡、课表与图书馆。", style = MaterialTheme.typography.bodyMedium)
-            Button(onClick = onOpenLogin) {
-                Icon(Icons.Filled.Login, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("登录")
+            Text("演示模式", style = MaterialTheme.typography.titleMedium)
+            Text("当前课表、校区和作息均为示例。学校认证与校园服务暂未接入。", style = MaterialTheme.typography.bodyMedium)
+            Button(onClick = onOpenSchedule) {
+                Text("查看演示课表")
             }
         }
     }

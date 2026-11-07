@@ -1,0 +1,79 @@
+# WHPU Pocket P1 开发记录
+
+## 阶段状态
+
+当前交付为 P1 演示模式开发基线。真实课表响应、真实认证和桌面主题兼容性仍有待验证项。
+
+| 阶段 | 已交付内容 | 待验证内容 |
+| --- | --- | --- |
+| P1.1 | 原项目构建基线、AppGraph 依赖与课表缓存复用方案 | 无 |
+| P1.2 | 应用名称、applicationId、W 字标及未接入业务入口隔离，保留 MIT 版权 | 校园品牌资源可后续完善 |
+| P1.3 | WHPU Provider、周次与课程解析、内存 CookieJar、Mock 数据及本地 HTTP 测试 | 真实 JSON 字段与学校会话 |
+| P1.4 | Compose 周课表、今日页、实验课、实践安排缓存及自定义日程 | 当前 OPPO 主题下的小组件放置与跳转 |
+| P1.5 | Debug APK、单元测试、真机测试记录 | 专用 Room 自动化回归测试尚未补齐 |
+
+实际工程使用单模块和手动依赖容器 AppGraph。本阶段复用既有 Repository、Room 实体和 Compose 网格，新增 WHPU Provider 与映射逻辑。
+
+## 构建
+
+使用 JDK 17、Android SDK 36 和项目的 Gradle Wrapper。设置 `ANDROID_HOME`，或在本机的 `local.properties` 中设置 `sdk.dir`。运行 `gradlew.bat :app:testDebugUnitTest :app:assembleDebug`，Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。
+
+## 当前实现
+
+- 本地演示课表包含虚构讲课、实验、单双周和校区，首次使用时写入 Room。演示学期起点为 2026-08-31，节次时间均为虚构示例。
+- WHPU 教务请求层使用可注入内存 CookieJar，支持已确认的课表请求参数，尚未接入登录流程。会话 Cookie 仅保存在内存中。
+- 课表解析保留原始字段，实践课程独立解析。周次解析支持范围、多段和单双周。
+- 原校园服务入口标为暂未接入，原校园网络客户端被阻断，电费后台采样取消。
+- 保留上游 MIT 许可证及版权声明。应用 ID 为 `com.whpupocket.app`。
+
+## 待验证和后续工作
+
+- 在默认主题或其他启动器上验证桌面小组件的放置、显示与点击跳转。
+- 用脱敏的真实响应核对节次、单双周及实践课字段。已知学期映射仅为 2026—2027 第一学期的 `xnm=2026`、`xqm=3`。
+- P1.6 需确认学校授权登录方式、CAS/Rump 到教务会话的交接、会话失效和退出流程，以及校历、作息和其他学期代码。
+- 真实 Provider 已提供 Repository 写入入口，需要学校授权的会话和学期记录后才能接入界面。不同数据源使用不同的本地学期 ID。
+- 完善网络异常及 Room 缓存回归测试，并用真实脱敏样本核对实践安排字段。
+
+## 2026-11-07 真机测试
+
+测试设备为 OPPO PJJ110，Android 16，使用用户当前自定义主题。
+
+- 安装与冷启动成功，无需登录即可打开演示课表。
+- 第 10 周显示双周程序设计课，第 11 周显示单周实验课；实验课详情中的教师、教室、节次与单双周一致。
+- 暂时关闭移动数据并冷启动，常规课程与实践安排仍正常显示。测试后已恢复原网络状态。
+- 临时自定义日程经过保存、重启、演示课表刷新后仍存在，随后通过界面删除。
+- Room 数据库快照包含 32 条 `whpu-demo` 排课及独立实践安排缓存。
+- 番茄钟开始、暂停、继续、后台返回正常，前台服务正常运行。测试产生的短时记录已通过界面删除，测试应用已授予通知权限。
+- 图书馆入口显示未接入提示。今日页旧登录说明已改为演示模式，并将校园服务统一标为暂未接入。
+- 系统已注册三个小组件，但当前桌面卡片选择器搜索 WHPU 无结果。用户说明自定义主题可能影响卡片加载，主题关联尚未验证。
+- 修复一处旧测试对系统时区的依赖后，374 项单元测试全部通过。
+- 修复“更多”和“关于”页状态栏留白，最终 APK 已重新安装并验证页面位置和演示缓存。
+
+当前执行环境可通过指定较短的 `jdk.net.unixdomain.tmpdir` 运行 Gradle，避免默认临时目录导致的本地连接错误。该设置仅用于本机构建，不写入项目 Gradle 配置。
+
+## 提交前审查
+
+- 常规课程缺失、为空或为 null 的周次现按解析失败处理，刷新保留上一份缓存。实践课程允许尚无确定周次。
+- 本轮收尾运行 `:app:testDebugUnitTest :app:assembleDebug` 成功，41 个测试类共 379 项测试，失败 0 项、跳过 0 项。新增回归覆盖周次缺失、null、空白及解析失败不触发缓存替换。
+- 单元测试与本地 HTTP 测试使用人工构造数据。local.properties、APK、真机截图、数据库快照及构建产物均由 Git 忽略规则排除。
+- 原郑大协议实现保留在源码中，其应用入口已隔离，共享校园客户端与研究生客户端已阻断。尚未实施全量网络抓包验证。
+
+## 修改文件清单
+
+- 工程与文档涉及 README.md、app/build.gradle.kts 和本开发记录。
+- 启动与依赖涉及 MainActivity.kt、ZZUPocketApp.kt、core/AppGraph.kt、core/net/HttpClients.kt、data/gms/GmsClient.kt。
+- 数据层新增 data/whpu 下的 WeekParser.kt、WhpuSchedule.kt、WhpuAcademicProvider.kt、WhpuAcademicRepository.kt、MockWhpuScheduleProvider.kt，并修改 data/repo/ScheduleRepository.kt。
+- 界面涉及 ui/nav/AppNav.kt、ui/schedule/ScheduleScreen.kt、ui/schedule/ScheduleViewModel.kt、ui/today/TodayScreen.kt、ui/today/TodayTimelineCard.kt、ui/widget/WidgetData.kt。
+- 资源涉及 drawable/ic_launcher_foreground.xml、values/strings.xml、xml/network_security_config.xml。
+- 测试新增 data/whpu 下六个测试文件，并修正 ui/widget/WidgetBalanceTest.kt 的系统时区假设。
+
+以上代码路径相对于 app/src/main/java/com/zzupocket/app，资源路径相对于 app/src/main/res，测试路径相对于 app/src/test/java/com/zzupocket/app。
+
+## P1.6 接入所需证据
+
+1. 脱敏课表 JSON，覆盖 kbList、sjkList、教学类型字典和星期映射。移除 xsxx 学生信息及其他个人字段；保留字段类型、空值、周次、jcs/jcor 和 ID 之间的关联。
+2. 学校允许使用的登录入口，以及 CAS/Rump 到教务会话的跳转顺序。由用户在学校页面完成交互认证，记录脱敏后的域名、路径和状态码，不记录密码、票据或 Cookie 值。
+3. 教务会话的建立、过期、403 和退出行为，以及验证码或 MFA 出现时的交互要求。
+4. 学校校历、上课作息及其他学期代码。当前登记的学期映射只有 2026—2027 第一学期。
+
+真实响应样本目前尚未提供。下一轮先验证脱敏样本，再依据已确认的认证流程实现 P1.6。

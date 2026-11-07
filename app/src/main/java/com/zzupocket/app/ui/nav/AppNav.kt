@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -229,22 +233,23 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     FocusScreen(onOpenStats = { navController.navigate(ROUTE_FOCUS_STATS) })
                 }
                 composable(Destination.CAMPUS.route) {
-                    CampusScreen(
-                        onOpenLogin = { navController.navigate(ROUTE_LOGIN) },
-                        onOpenDiagnostics = { navController.navigate(ROUTE_DIAGNOSTICS) },
-                        onOpenElectricity = { navController.navigate(ROUTE_ELECTRICITY) },
-                        onOpenCard = { navController.navigate(ROUTE_CARD) },
-                        onOpenRooms = { navController.navigate(ROUTE_ROOMS) },
-                        onOpenLibrary = { navController.navigate(ROUTE_LIBRARY) },
-                        onOpenAbout = { navController.navigate(ROUTE_ABOUT) },
-                        onOpenAppearance = { navController.navigate(ROUTE_APPEARANCE) },
-                    )
+                    Column(Modifier.statusBarsPadding().padding(24.dp)) {
+                        Text("校园服务暂未接入", style = MaterialTheme.typography.titleLarge)
+                        Text("登录、教务查询、校园卡、电费和图书馆正在适配。")
+                        TextButton(onClick = { navController.navigate(ROUTE_APPEARANCE) }) { Text("外观设置") }
+                        TextButton(onClick = { navController.navigate(ROUTE_ABOUT) }) { Text("关于") }
+                    }
                 }
                 composable(ROUTE_APPEARANCE) {
                     AppearanceScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_ABOUT) {
-                    AboutScreen(onBack = { navController.popBackStack() })
+                    Column(Modifier.statusBarsPadding().padding(24.dp)) {
+                        Text("WHPU Pocket", style = MaterialTheme.typography.titleLarge)
+                        Text("当前展示虚构演示课表。学校认证及校园服务暂未接入。")
+                        Text("基于 ZZUPocket 开发，保留原项目 MIT 许可证及版权声明。")
+                        TextButton(onClick = { navController.popBackStack() }) { Text("返回") }
+                    }
                 }
                 composable(
                     route = "$ROUTE_OVERVIEW/{semesterId}",
@@ -292,28 +297,22 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     FocusStatsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_ELECTRICITY) {
-                    ElectricityScreen(onBack = { navController.popBackStack() })
+                    UnavailableCampusService()
                 }
                 composable(ROUTE_CARD) {
-                    CardScreen(onBack = { navController.popBackStack() })
+                    UnavailableCampusService()
                 }
                 composable(ROUTE_ROOMS) {
-                    RoomScreen(onBack = { navController.popBackStack() })
+                    UnavailableCampusService()
                 }
                 composable(ROUTE_LIBRARY) {
-                    LibraryScreen(onBack = { navController.popBackStack() })
+                    UnavailableCampusService()
                 }
                 composable(ROUTE_LOGIN) {
-                    LoginScreen(
-                        onDone = { navController.popBackStack() },
-                        onBack = { navController.popBackStack() },
-                    )
+                    UnavailableCampusService()
                 }
                 composable(ROUTE_DIAGNOSTICS) {
-                    DiagnosticsScreen(
-                        onBack = { navController.popBackStack() },
-                        onLoggedOut = { navController.popBackStack() },
-                    )
+                    UnavailableCampusService()
                 }
                 }
 
@@ -408,6 +407,13 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun UnavailableCampusService() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("该校园服务暂未接入")
     }
 }
 

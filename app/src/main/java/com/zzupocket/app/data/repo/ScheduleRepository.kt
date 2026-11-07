@@ -11,6 +11,7 @@ import com.zzupocket.app.data.db.PeriodEntity
 import com.zzupocket.app.data.db.SemesterEntity
 import com.zzupocket.app.data.db.RoomOccupancyEntity
 import com.zzupocket.app.data.db.TimetableSyncEntity
+import com.zzupocket.app.data.db.KvCacheEntity
 import com.zzupocket.app.domain.RoomOccupation
 import com.zzupocket.app.data.eas.EasClient
 import com.zzupocket.app.domain.Course
@@ -24,6 +25,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.time.LocalDate
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.zzupocket.app.data.whpu.MockWhpuScheduleProvider
+import com.zzupocket.app.data.whpu.WhpuScheduleMapper
+import com.zzupocket.app.data.whpu.WhpuTerm
 
 /**
  * 课表仓库。
@@ -39,6 +45,40 @@ class ScheduleRepository(
     private val eas: EasClient,
     private val auth: AuthRepository,
 ) {
+    private val demoMutex = Mutex()
+
+    suspend fun ensureDemoTimetable() = demoMutex.withLock {
+        val id = WhpuScheduleMapper.DEMO_SEMESTER_ID
+        if (lastFetchedAt(WhpuScheduleMapper.DEMO_SOURCE, id) != null) {
+            val key = "whpu-practice:${WhpuScheduleMapper.DEMO_SOURCE}:$id"
+            if (db.kvCacheDao().get(key) == null) {
+                val practice = MockWhpuScheduleProvider().schedule(WhpuTerm.YEAR_2026_FIRST).practice
+                db.kvCacheDao().put(KvCacheEntity(key, kotlinx.serialization.json.JsonArray(practice.map { it.raw }).toString(), System.currentTimeMillis(), 0))
+            }
+            return@withLock
+        }
+        val schedule = MockWhpuScheduleProvider().schedule(WhpuTerm.YEAR_2026_FIRST)
+        val sessions = WhpuScheduleMapper.sessions(schedule, id, WhpuScheduleMapper.DEMO_SOURCE)
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            db.semesterDao().clearCurrent()
+            db.semesterDao().upsertAll(listOf(SemesterEntity(
+                id = id, code = "demo", nameZh = "演示课表（虚构）", schoolYear = "",
+                startDate = "2026-08-31", endDate = null, weekStartOnSunday = false,
+                weekIndicesCsv = (1..18).joinToString(","), isCurrent = true, updatedAt = now,
+            )))
+            val times = listOf(800 to 845, 855 to 940, 1000 to 1045, 1055 to 1140,
+                1400 to 1445, 1455 to 1540, 1600 to 1645, 1655 to 1740,
+                1900 to 1945, 1955 to 2040)
+            db.periodDao().upsertAll(times.mapIndexed { index, time ->
+                PeriodEntity(index + 1, "第${index + 1}节", time.first, time.second,
+                    if (index < 4) "MORNING" else if (index < 8) "AFTERNOON" else "EVENING",
+                    index / 2 + 1, now)
+            })
+            saveTimetable(WhpuScheduleMapper.DEMO_SOURCE, id, sessions, WhpuScheduleMapper.courses(sessions), now,
+                kotlinx.serialization.json.JsonArray(schedule.practice.map { it.raw }).toString())
+        }
+    }
 
     // ── 同步 ─────────────────────────────────────────────────────────────
 
@@ -448,6 +488,7 @@ class ScheduleRepository(
         sessions: List<Session>,
         courses: List<Course>,
         fetchedAt: Long = System.currentTimeMillis(),
+        practiceJson: String? = null,
     ): Boolean {
         val hash = timetableHash(sessions)
         val existing = db.timetableSyncDao().get(source, semesterId)
@@ -487,10 +528,16 @@ class ScheduleRepository(
                 )
         }
         db.withTransaction {
+            require(db.courseSessionDao().bySemester(semesterId).none {
+                it.source != source && it.source != SOURCE_CUSTOM
+            }) { "Each timetable source must use a separate semester ID" }
             db.courseSessionDao().deleteBySemesterAndSource(semesterId, source)
             db.courseDao().deleteBySemester(semesterId)
             db.courseDao().upsertAll(courseEntities)
             db.courseSessionDao().upsertAll(sessionEntities)
+            if (practiceJson != null) {
+                db.kvCacheDao().put(KvCacheEntity("whpu-practice:$source:$semesterId", practiceJson, fetchedAt, 0))
+            }
             db.timetableSyncDao().upsert(
                 TimetableSyncEntity(
                     source = source,
@@ -504,6 +551,11 @@ class ScheduleRepository(
             )
         }
         return changed
+    }
+
+    suspend fun whpuPractice(source: String, semesterId: Int): List<com.zzupocket.app.data.whpu.WhpuPracticeCourse> {
+        val payload = db.kvCacheDao().get("whpu-practice:$source:$semesterId")?.payload ?: return emptyList()
+        return com.zzupocket.app.data.whpu.WhpuScheduleParser.parse("{\"kbList\":[],\"sjkList\":$payload}").practice
     }
 
     /**

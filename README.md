@@ -1,4 +1,10 @@
-# ZZUPocket
+# WHPU Pocket
+
+本项目基于 [ZZUPocket](https://github.com/3beuml/ZZUPocket) 开发，面向武汉轻工大学。当前版本展示本地虚构课表，课程、教学周起点、校区和作息均为示例。学校登录及校园服务尚未接入。
+
+构建要求和迁移进度见 [P1 开发记录](docs/whpu-p1.md)。原项目许可证和版权声明保留在 LICENSE 中。
+
+## 原项目说明
 
 郑州大学校园助手（Android）
 

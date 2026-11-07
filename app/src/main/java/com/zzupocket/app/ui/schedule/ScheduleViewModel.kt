@@ -119,6 +119,7 @@ data class ScheduleUiState(
     val weekResolvedOn: LocalDate? = null,
     /** 整学期全部课；翻周时在内存里过滤，不闪空白也不发请求 */
     val allSessions: List<Session> = emptyList(),
+    val practiceCourses: List<com.zzupocket.app.data.whpu.WhpuPracticeCourse> = emptyList(),
     val periods: List<Period> = emptyList(),
     val courses: List<Course> = emptyList(),
     /** 本学期自己加的日程 */
@@ -172,11 +173,6 @@ class ScheduleViewModel : ViewModel() {
         viewModelScope.launch { bootstrap() }
         viewModelScope.launch { observeEnrollmentYear() }
         // 学籍判定：本科教务认不认这个账号。判为"非本科"就切到研究生视图。
-        viewModelScope.launch {
-            if (detectGradMode() && com.zzupocket.app.core.AppGraph.gmsScheduleSource.hasSession()) {
-                loadGmsWeek()
-            }
-        }
     }
 
     // ── 研究生课表（gmsstu / 研究生院那套系统）──────────────────────────
@@ -221,7 +217,7 @@ class ScheduleViewModel : ViewModel() {
         return gradByEvidence
     }
 
-    fun openGmsLogin() = _state.update { it.copy(gmsDialogOpen = true) }
+    fun openGmsLogin() = _state.update { it.copy(notice = "校园教务登录暂未接入") }
 
     /**
      * 手动切到研究生视图（兜底入口）。
@@ -231,13 +227,7 @@ class ScheduleViewModel : ViewModel() {
      * 这个入口让他自己声明一次，探测结果不再回改（gradProbed 置位）。
      */
     fun useGradSchedule() {
-        gradProbed = true
-        _state.update { it.copy(gradMode = true, error = null, gmsError = null) }
-        if (com.zzupocket.app.core.AppGraph.gmsScheduleSource.hasSession()) {
-            loadGmsWeek(force = true)
-        } else {
-            openGmsLogin()
-        }
+        openGmsLogin()
     }
 
     fun closeGmsLogin() = _state.update { it.copy(gmsDialogOpen = false) }
@@ -560,6 +550,7 @@ cacheNoticeNeedsLogin = expired,
     }
 
     private suspend fun bootstrap() {
+        repo.ensureDemoTimetable()
         // ⚠️ loggedIn 必须在**任何网络请求之前**就写进状态，否则会骗用户去反复重登：
         // 以前这里是"先 refreshSemesters()，直到最后才把 loggedIn 写进状态"，于是教务回 401/403
         // 时异常被 catch 掉，loggedIn 就停在默认的 false —— 界面同时显示红色「教务登录态已失效」
@@ -697,6 +688,12 @@ cacheNoticeNeedsLogin = expired,
         val sessions = repo.sessionsOfSemester(semester.id)
         val courses = repo.courses(semester.id)
         val plans = repo.customPlans(semester.id)
+        val practiceSource = if (semester.id == com.zzupocket.app.data.whpu.WhpuScheduleMapper.DEMO_SEMESTER_ID) {
+            com.zzupocket.app.data.whpu.WhpuScheduleMapper.DEMO_SOURCE
+        } else {
+            com.zzupocket.app.data.whpu.WhpuAcademicRepository.SOURCE
+        }
+        val practice = repo.whpuPractice(practiceSource, semester.id)
         _state.update {
             it.copy(
                 loading = false,
@@ -706,6 +703,7 @@ cacheNoticeNeedsLogin = expired,
                 // 记下"这个周次是按今天算的"，resume 时才知道要不要重算
                 weekResolvedOn = today,
                 allSessions = sessions,
+                practiceCourses = practice,
                 courses = courses,
                 plans = plans,
                 weekStart = settings.weekOneStart,
@@ -1046,6 +1044,11 @@ cacheNoticeNeedsLogin = expired,
     fun refresh() {
         val semester = _state.value.selectedSemester
         viewModelScope.launch {
+            if (semester?.id == com.zzupocket.app.data.whpu.WhpuScheduleMapper.DEMO_SEMESTER_ID) {
+                loadSemester(semester, loggedIn = false, forceSync = false)
+                _state.update { it.copy(notice = "当前显示本地演示课表") }
+                return@launch
+            }
             _state.update { it.copy(loading = true, error = null) }
             if (auth.isLoggedIn()) {
                 runCatching { repo.refreshSemesters() }
