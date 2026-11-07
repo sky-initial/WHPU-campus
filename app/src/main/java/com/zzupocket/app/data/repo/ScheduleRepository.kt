@@ -606,15 +606,19 @@ class ScheduleRepository(
         db.timetableSyncDao().observe(source, semesterId)
 
     /**
-     * 清掉某个来源的缓存（退出登录时用）。
+     * 清掉某个来源、某个学期的缓存（退出登录时用）。
      *
      * 课表是按账号抓的，退出后不该留在设备上；`custom` 日程不在此列（那是用户自己的数据）。
      */
     suspend fun clearTimetable(source: String, semesterId: Int) {
         db.withTransaction {
+            require(db.courseSessionDao().bySemester(semesterId).none {
+                it.source != source && it.source != SOURCE_CUSTOM
+            }) { "Requested source does not own this semester" }
             db.courseSessionDao().deleteBySemesterAndSource(semesterId, source)
             db.courseDao().deleteBySemester(semesterId)
-            db.timetableSyncDao().clearBySource(source)
+            db.timetableSyncDao().clearTerm(source, semesterId)
+            db.kvCacheDao().remove("whpu-practice:$source:$semesterId")
             // 显示覆盖跟课表同生命周期：按账号抓的数据退出后不该留在设备上
             if (source != SOURCE_CUSTOM) db.displayOverrideDao().deleteBySemester(semesterId)
         }

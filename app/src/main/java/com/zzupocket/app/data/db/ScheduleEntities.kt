@@ -130,8 +130,8 @@ interface TimetableSyncDao {
     @Query("DELETE FROM timetable_sync")
     suspend fun clear()
 
-    @Query("DELETE FROM timetable_sync WHERE source = :source")
-    suspend fun clearBySource(source: String)
+    @Query("DELETE FROM timetable_sync WHERE source = :source AND semesterId = :semesterId")
+    suspend fun clearTerm(source: String, semesterId: Int)
 }
 
 // ── 上课记录 ────────────────────────────────────────────────────────────
