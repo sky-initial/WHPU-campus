@@ -1,0 +1,37 @@
+{
+  "kbList":[
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"1-2","jcor":"1-2","jc":"1-2节","xqj":"1","zcd":"4-8周","xm":"教师1","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"1-2","jcor":"1-2","jc":"1-2节","xqj":"1","zcd":"9-13周","xm":"教师2","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"1-2","jcor":"1-2","jc":"1-2节","xqj":"1","zcd":"14-17周","xm":"教师3","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程2","kch":"课程2","jxb_id":"教学班2","jcs":"5-6","jcor":"5-6","jc":"5-6节","xqj":"1","zcd":"4-5周,8-13周","xm":"教师4","cdmc":"教室2","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"1"},
+    {"kcmc":"课程2","kch":"课程2","jxb_id":"教学班2","jcs":"5-6","jcor":"5-6","jc":"5-6节","xqj":"1","zcd":"14-15周","xm":"教师5","cdmc":"教室2","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"1"},
+    {"kcmc":"课程3","kch":"课程3","jxb_id":"教学班3","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"2","zcd":"4周,7-9周(单),10周","xm":"教师6","cdmc":"教室3","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程4","kch":"课程4","jxb_id":"教学班4","jcs":"5-6","jcor":"5-6","jc":"5-6节","xqj":"2","zcd":"4-9周","xm":"教师7","cdmc":"教室4","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程5","kch":"课程5","jxb_id":"教学班5","jcs":"9-11","jcor":"9-11","jc":"9-11节","xqj":"2","zcd":"4周,14周","xm":"教师8","cdmc":"教室5","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程5","kch":"课程5","jxb_id":"教学班5","jcs":"9-11","jcor":"9-11","jc":"9-11节","xqj":"2","zcd":"5-13周","xm":"教师8","cdmc":"教室6","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"3","zcd":"4-8周","xm":"教师1","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"3","zcd":"9-12周","xm":"教师2","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"3","zcd":"13-16周","xm":"教师3","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程3","kch":"课程3","jxb_id":"教学班6","jcs":"5-6","jcor":"5-8","jc":"5-6节","xqj":"3","zcd":"9周","xm":"教师6","cdmc":"教室7","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"实验","jxbsftkbj":"0"},
+    {"kcmc":"课程3","kch":"课程3","jxb_id":"教学班6","jcs":"5-7","jcor":"5-8","jc":"5-7节","xqj":"3","zcd":"11-13周(单)","xm":"教师6","cdmc":"教室7","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"实验","jxbsftkbj":"0"},
+    {"kcmc":"课程6","kch":"课程6","jxb_id":"教学班7","jcs":"7-8","jcor":"5-8","jc":"7-8节","xqj":"3","zcd":"6周","xm":"教师9","cdmc":"教室8","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程6","kch":"课程6","jxb_id":"教学班7","jcs":"7-8","jcor":"5-8","jc":"7-8节","xqj":"3","zcd":"8周","xm":"教师10","cdmc":"教室8","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程6","kch":"课程6","jxb_id":"教学班7","jcs":"7-8","jcor":"5-8","jc":"7-8节","xqj":"3","zcd":"10周","xm":"教师2","cdmc":"教室8","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程6","kch":"课程6","jxb_id":"教学班7","jcs":"7-8","jcor":"5-8","jc":"7-8节","xqj":"3","zcd":"12周","xm":"教师11","cdmc":"教室8","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程2","kch":"课程2","jxb_id":"教学班2","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"4","zcd":"5-7周,10-12周(双)","xm":"教师4","cdmc":"教室2","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"1"},
+    {"kcmc":"课程2","kch":"课程2","jxb_id":"教学班2","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"4","zcd":"14-15周","xm":"教师5","cdmc":"教室2","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"1"},
+    {"kcmc":"课程4","kch":"课程4","jxb_id":"教学班4","jcs":"1-2","jcor":"1-2","jc":"1-2节","xqj":"5","zcd":"4-9周","xm":"教师7","cdmc":"教室4","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程3","kch":"课程3","jxb_id":"教学班3","jcs":"3-4","jcor":"3-4","jc":"3-4节","xqj":"5","zcd":"5-8周,10-11周","xm":"教师6","cdmc":"教室3","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"5-6","jcor":"5-6","jc":"5-6节","xqj":"5","zcd":"4-7周","xm":"教师1","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"5-6","jcor":"5-6","jc":"5-6节","xqj":"5","zcd":"8-12周","xm":"教师2","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程1","kch":"课程1","jxb_id":"教学班1","jcs":"5-6","jcor":"5-6","jc":"5-6节","xqj":"5","zcd":"13-16周","xm":"教师3","cdmc":"教室1","xqmc":"金银湖","xsdm":"01","xslxbj":"★","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程6","kch":"课程6","jxb_id":"教学班7","jcs":"5-8","jcor":"5-8","jc":"5-8节","xqj":"6","zcd":"14周","xm":"教师3","cdmc":"教室8","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"面授讲课","jxbsftkbj":"0"},
+    {"kcmc":"课程6","kch":"课程6","jxb_id":"教学班7","jcs":"5-8","jcor":"5-8","jc":"5-8节","xqj":"6","zcd":"16周","xm":"教师12","cdmc":"教室8","xqmc":"常青花园","xsdm":"02","xslxbj":"○","skfsmc":"面授讲课","jxbsftkbj":"0"}
+  ],
+  "sjkList":[
+    {"kcmc":"实践安排1","qsjsz":"1-3周","jsxm":"教师3,教师13,教师4,教师14,教师15","sfsjk":"1","xqmc":"金银湖"},
+    {"kcmc":"实践安排2","qsjsz":"19周","jsxm":"教师1","xqmc":"金银湖"},
+    {"kcmc":"实践安排3","qsjsz":"16周","jsxm":"教师6","xqmc":"金银湖"}
+  ],
+  "xsbjList":[{"xsdm":"01","xslxbj":"★","xsmc":"讲课"},{"xsdm":"02","xslxbj":"○","xsmc":"实验","ywxsmc":"Experiment"},{"xsdm":"05","xslxbj":"◆","xsmc":"讨论"},{"xsdm":"04","xslxbj":"◇","xsmc":"上机","ywxsmc":"Computer"},{"xsdm":"03","xslxbj":"●","xsmc":"实践"}]
+}

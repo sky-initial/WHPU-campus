@@ -49,4 +49,17 @@ class WhpuAcademicRepositoryTest {
         val repo = WhpuAcademicRepository(MockWhpuScheduleProvider()) { _, _, _, _, _ -> }
         repo.refresh(WhpuTerm.YEAR_2026_FIRST, WhpuScheduleMapper.DEMO_SEMESTER_ID)
     }
+
+    @Test fun malformedPracticeDoesNotReplaceCachedSnapshot() = runTest {
+        var saved = false
+        val provider = object : WhpuScheduleProvider {
+            override fun schedule(term: WhpuTerm) = WhpuScheduleParser.parse(
+                """{"kbList":[],"sjkList":[{"kcmc":"示例实践","qsjsz":"未知"}]}""",
+            )
+        }
+        val repo = WhpuAcademicRepository(provider) { _, _, _, _, _ -> saved = true }
+        val result = runCatching { repo.refresh(WhpuTerm.YEAR_2026_FIRST, 123) }
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+        assertFalse(saved)
+    }
 }

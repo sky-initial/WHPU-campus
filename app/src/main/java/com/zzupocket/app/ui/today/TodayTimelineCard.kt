@@ -97,15 +97,15 @@ class TodayTimelineViewModel : ViewModel() {
     private suspend fun load() {
         scheduleRepo.ensureDemoTimetable()
         val now = System.currentTimeMillis()
-        val nowMin = LocalTime.now().let { it.hour * 60 + it.minute }
-        val today = LocalDate.now()
+        val nowMin = com.zzupocket.app.data.whpu.WhpuCalendar.now().let { it.hour * 60 + it.minute }
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
 
         // 本科 + 研究生统一口径：研究生账号没有学期行，也要能看到今天的课
         val sessions = runCatching {
             com.zzupocket.app.data.repo.TodayTimetable
                 .sessionsOn(scheduleRepo, AppGraph.uiPrefsStore, today)
         }.getOrDefault(emptyList())
-        val periods = scheduleRepo.periods()
+        val periods = scheduleRepo.currentSemester()?.let { scheduleRepo.periodsForSemester(it.id) } ?: scheduleRepo.periods()
 
         // 今天（按 FocusStats 的口径：凌晨 4 点起算）的专注记录
         val dayStart = FocusStats.dayStart(FocusStats.dayKey(now))

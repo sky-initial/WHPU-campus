@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zzupocket.app.core.ScheduleText
 import com.zzupocket.app.domain.Course
+import com.zzupocket.app.domain.currentTeachers
 
 /**
  * 课程总览：该学期要上的课**每行一门**，点进去看详情。
@@ -99,10 +100,10 @@ fun CourseOverviewScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(courses, key = { it.key }) { course ->
-                    CourseCard(course) { vm.openDetail(course) }
+                    CourseCard(course, state.weekIndex) { vm.openDetail(course) }
                 }
                 items(manual, key = { "custom:${it.code}" }) { plan ->
-                    CourseCard(plan.toManualCourse(), badge = "手动") {
+                    CourseCard(plan.toManualCourse(), state.weekIndex, badge = "手动") {
                         vm.openDetail(plan.toManualCourse())
                     }
                 }
@@ -113,6 +114,8 @@ fun CourseOverviewScreen(
     state.detailCourse?.let { course ->
         CourseDetailSheet(
             course = course,
+            weekIndex = state.weekIndex,
+            selectedSession = state.detailSession,
             onDismiss = vm::closeDetail,
             overrides = state.detailOverrides,
             onApplyEdits = vm::applyDisplayEdits,
@@ -154,7 +157,7 @@ private fun com.zzupocket.app.domain.Plan.toManualCourse(): com.zzupocket.app.do
     )
 
 @Composable
-private fun CourseCard(course: Course, badge: String? = null, onClick: () -> Unit) {
+private fun CourseCard(course: Course, weekIndex: Int, badge: String? = null, onClick: () -> Unit) {
     GlassCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,9 +185,10 @@ private fun CourseCard(course: Course, badge: String? = null, onClick: () -> Uni
                     )
                 }
             }
-            if (course.teachers.isNotEmpty()) {
+            val teachers = course.currentTeachers(weekIndex)
+            if (teachers.isNotEmpty()) {
                 Text(
-                    text = course.teachers.joinToString("、"),
+                    text = "本周教师：${teachers.joinToString("、")}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

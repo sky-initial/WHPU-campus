@@ -35,7 +35,12 @@ fun ZZUPocketTheme(
     val colorScheme = rememberAppColorScheme(preset = preset, dark = dark)
     MaterialTheme(
         colorScheme = colorScheme,
-        content = content,
+        content = {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides colorScheme.onSurface,
+                content = content,
+            )
+        },
     )
 }
 

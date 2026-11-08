@@ -21,7 +21,13 @@ data class WhpuCourse(
     val raw: JsonObject,
 )
 
-data class WhpuPracticeCourse(val name: String?, val weeks: Set<Int>, val raw: JsonObject)
+data class WhpuPracticeCourse(
+    val name: String?,
+    val weeks: Set<Int>,
+    val raw: JsonObject,
+    val teacher: String? = null,
+    val campus: String? = null,
+)
 data class WhpuSchedule(val courses: List<WhpuCourse>, val practice: List<WhpuPracticeCourse>)
 
 object WhpuScheduleParser {
@@ -47,7 +53,14 @@ object WhpuScheduleParser {
         }
         val practice = root.array("sjkList").map { element ->
             val row = element.jsonObject
-            WhpuPracticeCourse(row.text("kcmc"), WeekParser.parse(row.text("zcd").orEmpty()), row)
+            // The school response uses qsjsz/jsxm; zcd/xm also read older demo caches.
+            WhpuPracticeCourse(
+                row.text("kcmc"),
+                WeekParser.parse((row.text("qsjsz") ?: row.text("zcd")).orEmpty()),
+                row,
+                row.text("jsxm") ?: row.text("xm"),
+                row.text("xqmc"),
+            )
         }
         return WhpuSchedule(courses, practice)
     }

@@ -142,9 +142,14 @@ object AppGraph {
     }
 
     val whpuSessionManager by lazy { com.zzupocket.app.data.whpu.WhpuSessionManager() }
+    val whpuAcademicProvider by lazy {
+        com.zzupocket.app.data.whpu.WhpuAcademicProvider(
+            whpuSessionManager, userAgent = { whpuSessionManager.userAgent },
+        )
+    }
     val whpuAcademicRepository by lazy {
         com.zzupocket.app.data.whpu.WhpuAcademicRepository(
-            com.zzupocket.app.data.whpu.WhpuAcademicProvider(whpuSessionManager), scheduleRepository,
+            whpuAcademicProvider, scheduleRepository,
         )
     }
 

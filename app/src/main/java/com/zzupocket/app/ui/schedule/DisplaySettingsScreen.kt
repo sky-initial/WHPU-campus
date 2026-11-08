@@ -47,9 +47,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.rememberDatePickerState
+import com.zzupocket.app.ui.components.WeekStartWheelDialog
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -724,29 +722,15 @@ private fun WeekSettingsCard(
     }
 
     if (showDatePicker) {
-        val initial = week.weekStart
-            ?.atStartOfDay(java.time.ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
-        val state = rememberDatePickerState(initialSelectedDateMillis = initial)
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        state.selectedDateMillis?.let { millis ->
-                            val picked = java.time.Instant.ofEpochMilli(millis)
-                                .atZone(java.time.ZoneOffset.UTC).toLocalDate()
-                            onSetWeekStart(picked)
-                        }
-                        showDatePicker = false
-                    },
-                ) { Text("确定") }
+        WeekStartWheelDialog(
+            initialDate = week.weekStart ?: com.zzupocket.app.data.whpu.WhpuCalendar.today(),
+            requiredDay = java.time.DayOfWeek.of(week.startDay.isoDay),
+            onDismiss = { showDatePicker = false },
+            onConfirm = {
+                onSetWeekStart(it)
+                showDatePicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("取消") }
-            },
-        ) {
-            DatePicker(state = state)
-        }
+        )
     }
 
     if (showWeekPicker) {
