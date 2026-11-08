@@ -1,6 +1,8 @@
 # WHPU Pocket
 
-本项目基于 [ZZUPocket](https://github.com/3beuml/ZZUPocket) 开发，面向武汉轻工大学。首次启动展示明确标注的虚构演示课表。支持学校页面交互登录、真实课表导入和成绩查询，第一周日期由用户按学期设置；已验证真实课表及成绩保存、课表离线冷启动和今日页缓存读取。校园卡、电费和图书馆等服务暂未接入。
+本项目基于 [ZZUPocket](https://github.com/3beuml/ZZUPocket) 开发，面向武汉轻工大学。首次启动展示明确标注的虚构演示课表。支持学校页面交互登录、真实课表导入、成绩查询和考试安排，第一周日期由用户按学期设置；已验证真实课表及成绩保存、课表离线冷启动和今日页缓存读取。校园卡、电费和图书馆等服务暂未接入。
+
+测试版下载见 [GitHub Releases](https://github.com/sky-initial/WHPU-campus/releases)，安装与签名说明见 [发布说明](docs/whpu-release.md)。
 
 构建要求和迁移进度见 [P1 开发记录](docs/whpu-p1.md)。原项目许可证和版权声明保留在 LICENSE 中。
 
