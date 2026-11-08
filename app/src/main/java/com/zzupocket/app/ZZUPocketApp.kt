@@ -16,6 +16,7 @@ class ZZUPocketApp : Application() {
         super.onCreate()
         AppGraph.init(this)
         AppGraph.pomodoroNotifications.ensureChannels()
+        AppGraph.classDndController.observe(appScope)
 
         // 电量定时采样：学校不给历史用电量，只能靠按点采样差分算（尽力而为）
         EnergySamplingWorker.cancel(this)

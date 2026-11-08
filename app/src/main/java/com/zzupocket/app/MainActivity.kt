@@ -71,6 +71,11 @@ class MainActivity : ComponentActivity() {
      *  · App 已经在运行时 → `onNewIntent`（组件的 Intent 带 CLEAR_TOP，系统会重建本 Activity）。
      * 只处理 `onCreate` 的话，第二种情况会被静默丢掉。
      */
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch { AppGraph.classDndController.refresh() }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -78,10 +83,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consumeWidgetRoute(intent: Intent?) {
-        val route = intent?.getStringExtra(AppRoutes.EXTRA_ROUTE) ?: return
+        val route = if (intent?.action == android.app.NotificationManager.ACTION_AUTOMATIC_ZEN_RULE)
+            AppRoutes.CLASS_DND else intent?.getStringExtra(AppRoutes.EXTRA_ROUTE) ?: return
         // 读完就把 extra 从 Intent 里删掉：这条 Intent 会被系统留着，
         // 重建时不该再取到它（否则每次重建都要跳一次）
-        intent.removeExtra(AppRoutes.EXTRA_ROUTE)
+        intent?.removeExtra(AppRoutes.EXTRA_ROUTE)
         widgetRoute = route
         routeToken++
     }
