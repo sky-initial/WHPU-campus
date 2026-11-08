@@ -5,6 +5,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 object WhpuWebPolicy {
     const val LOGIN = "https://jwglxt.whpu.edu.cn/xtgl/login_slogin.html"
     const val SCHEDULE = "https://jwglxt.whpu.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151"
+    const val GRADES = "https://jwglxt.whpu.edu.cn/cjcx/cjcx_cxXsgrcj.html?doType=query&gnmkdm=N305005"
+    const val GRADES_PAGE = "https://jwglxt.whpu.edu.cn/cjcx/cjcx_cxDgXscj.html?gnmkdm=N305005&layout=default"
     /** Only the origin is suitable for UI diagnostics; paths and queries may contain CAS tickets. */
     fun navigationOrigin(url: String): String {
         val parsed = url.toHttpUrlOrNull() ?: return "非 HTTP(S) 跳转"

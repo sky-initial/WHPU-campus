@@ -7,9 +7,9 @@ import kotlinx.coroutines.ensureActive
 class WhpuImportCoordinator(
     private val provider: WhpuScheduleProvider,
     private val session: WhpuSessionManager,
-    private val save: suspend (WhpuTerm, WhpuSchedule, Boolean, () -> Boolean) -> Unit,
+    private val save: suspend (WhpuTerm, WhpuSchedule, Boolean, () -> Boolean, WhpuAccountId?) -> Unit,
 ) {
-    suspend fun import(term: WhpuTerm, replaceAccount: Boolean = false): WhpuSchedule {
+    suspend fun import(term: WhpuTerm, replaceAccount: Boolean = false, legacyAccount: WhpuAccountId? = null): WhpuSchedule {
         val revision = session.revision
         val context = currentCoroutineContext()
         val current = { context.ensureActive(); session.revision == revision }
@@ -17,7 +17,7 @@ class WhpuImportCoordinator(
             val schedule = provider.fetchSchedule(term)
             if (!current()) throw WhpuAcademicException.SessionChanged()
             if (schedule.accountId == null) throw WhpuAcademicException.MissingAccount()
-            save(term, schedule, replaceAccount, current)
+            save(term, schedule, replaceAccount, current, legacyAccount)
             return schedule
         } catch (e: WhpuAcademicException.SessionExpired) {
             if (session.revision == revision) session.clear()

@@ -31,37 +31,38 @@ import java.time.LocalDate
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit) {
+fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var academicPage by remember { mutableStateOf(false) }
     var host by remember { mutableStateOf("jwglxt.whpu.edu.cn") }
-    var message by remember { mutableStateOf("先在下方学校页面登录，再点击“同步到课表”。导入成功后选择第一周日期。") }
+    var message by remember { mutableStateOf(if (signInOnly) "在下方学校页面完成登录，然后返回成绩查询并刷新。" else "先在下方学校页面登录，再点击“同步到课表”。导入成功后选择第一周日期。") }
     var busy by remember { mutableStateOf(false) }
     var imported by remember { mutableStateOf(false) }
     var syncJob by remember { mutableStateOf<Job?>(null) }
-    var accountChange by remember { mutableStateOf<Boolean?>(null) }
+    var accountChange by remember { mutableStateOf<WhpuAcademicException.AccountChangeRequired?>(null) }
     var pendingSemesterId by rememberSaveable { mutableStateOf<Int?>(null) }
     var pickerInitial by rememberSaveable { mutableStateOf(WhpuCalendar.today().toString()) }
     var dateError by remember { mutableStateOf<String?>(null) }
     var year by rememberSaveable { mutableStateOf("2026") }
     var termCode by rememberSaveable { mutableStateOf("3") }
     val term = year.toIntOrNull()?.takeIf { it in 2000..2199 }?.let { WhpuTerm(it, termCode) }
-    fun startSync(replaceAccount: Boolean = false) {
+    fun startSync(replaceAccount: Boolean = false, legacyAccount: WhpuAccountId? = null) {
         val selectedTerm = term
         if (selectedTerm == null) { message = "请填写有效的学年。"; return }
         val view = webView ?: return
         if (!WhpuWebPolicy.isAcademic(view.url.orEmpty())) { message = "请先返回教务系统页面。"; return }
         AppGraph.whpuSessionManager.acceptBrowserSession(
             CookieManager.getInstance().getCookie(WhpuWebPolicy.SCHEDULE), view.settings.userAgentString,
+            CookieManager.getInstance().getCookie(WhpuWebPolicy.GRADES),
         )
         busy = true
         imported = false
         message = "正在读取并保存课表…"
         syncJob = scope.launch {
             try {
-                val schedule = AppGraph.whpuImportCoordinator.import(selectedTerm, replaceAccount)
+                val schedule = AppGraph.whpuImportCoordinator.import(selectedTerm, replaceAccount, legacyAccount)
                 syncJob = null // The complete snapshot is committed; subsequent date setup is a separate step.
                 val previous = AppGraph.uiPrefsStore.weekSettings(selectedTerm.semesterId)
                 pickerInitial = (previous.weekOneStart
@@ -74,7 +75,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: WhpuAcademicException.AccountChangeRequired) {
-                accountChange = e.legacyCache
+                accountChange = e
                 message = "尚未替换本机课表，原缓存保留。"
             } catch (e: Exception) {
                 message = when (e) {
@@ -90,15 +91,11 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit) {
             } finally { busy = false }
         }
     }
-    accountChange?.let { legacy ->
-        AlertDialog(
-            onDismissRequest = { accountChange = null },
-            title = { Text(if (legacy) "确认旧版课表归属" else "检测到不同账号") },
-            text = { Text((if (legacy) "旧版缓存未记录账号，无法确认与当前登录账号是否一致。" else "当前登录账号与本机学校课表所属账号不同。") +
-                "继续会重新获取课表，成功后替换所有学期的旧学校课表和课程显示修改；自定义日程、演示课表保留。获取失败时不替换。") },
-            confirmButton = { TextButton(onClick = { accountChange = null; startSync(true) }) { Text("替换并导入") } },
-            dismissButton = { TextButton(onClick = { accountChange = null }) { Text("保留原课表") } },
-        )
+    accountChange?.let { change ->
+        WhpuAccountChangeDialog(change.legacyCache, onConfirm = { accountChange = null; startSync(true) },
+            onDismiss = { accountChange = null }, onBindLegacy = change.account?.let { account ->
+                { accountChange = null; startSync(legacyAccount = account) }
+            })
     }
     DisposableEffect(Unit) {
         onDispose { syncJob?.cancel(); webView?.stopLoading(); webView?.destroy() }
@@ -129,13 +126,13 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("学校登录与课表同步") }, navigationIcon = {
+        topBar = { TopAppBar(title = { Text(if (signInOnly) "学校登录" else "学校登录与课表同步") }, navigationIcon = {
             TextButton(onClick = onBack) { Text("返回") }
         }) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!signInOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(year, { year = it }, label = { Text("学年起始年") },
                         modifier = Modifier.weight(1f), singleLine = true, enabled = !busy)
                     FilterChip(selected = termCode == "3", onClick = { termCode = "3" }, label = { Text("第一学期") }, enabled = !busy)
@@ -144,8 +141,10 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit) {
                 Text(message, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = !busy && academicPage, onClick = { startSync() }) {
-                        Text(if (busy) "同步中…" else "同步到课表")
+                    Button(enabled = !busy && academicPage, onClick = {
+                        if (signInOnly) onImported() else startSync()
+                    }) {
+                        Text(if (signInOnly) "返回成绩查询" else if (busy) "同步中…" else "同步到课表")
                     }
                     if (syncJob?.isActive == true) TextButton(onClick = {
                         syncJob?.cancel()
@@ -211,7 +210,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit) {
                         override fun onPageFinished(view: WebView, url: String) {
                             academicPage = WhpuWebPolicy.isAcademic(url)
                             if (academicPage && message == "正在通过 HTTPS 返回教务系统…") {
-                                message = "已返回教务页面。完成学校登录后点击“同步到课表”，导入成功后再设置日期。"
+                                message = if (signInOnly) "已返回教务页面。登录完成后返回成绩查询并刷新。" else "已返回教务页面。完成学校登录后点击“同步到课表”，导入成功后再设置日期。"
                             }
                         }
                         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
