@@ -90,6 +90,96 @@ class WhpuCacheTest {
         assertNull(repo.lastFetchedAt("whpu", term.semesterId))
     }
 
+    private fun owned(name: String, owner: String) = schedule(name).copy(accountId = WhpuAccountId(owner))
+
+    @Test fun sameAccountRefreshPreservesOtherTermsAndOwnerSurvivesReopen() = runBlocking {
+        val first = WhpuTerm(2026, "3")
+        val second = WhpuTerm(2026, "12")
+        repo.importWhpuAccountTimetable(first, owned("first", "synthetic-a"))
+        repo.importWhpuAccountTimetable(second, owned("second", "synthetic-a"))
+        db.close(); openRepository()
+        repo.importWhpuAccountTimetable(first, owned("updated", "synthetic-a"))
+        assertEquals("second", repo.courses(second.semesterId).single().nameZh)
+        assertEquals("updated", repo.courses(first.semesterId).single().nameZh)
+    }
+
+    @Test fun differentAccountRequiresConfirmationAndLeavesSnapshotUntouched() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        repo.importWhpuAccountTimetable(term, owned("old", "synthetic-a"))
+        val before = repo.lastFetchedAt("whpu", term.semesterId)
+        val result = runCatching { repo.importWhpuAccountTimetable(term, owned("new", "synthetic-b")) }
+        assertTrue(result.exceptionOrNull() is WhpuAcademicException.AccountChangeRequired)
+        assertEquals("old", repo.courses(term.semesterId).single().nameZh)
+        assertEquals(before, repo.lastFetchedAt("whpu", term.semesterId))
+    }
+
+    @Test fun confirmedAccountSwitchReplacesSchoolTermsButPreservesCustomAndDemo() = runBlocking {
+        repo.ensureDemoTimetable()
+        val first = WhpuTerm(2026, "3")
+        val second = WhpuTerm(2026, "12")
+        repo.importWhpuAccountTimetable(first, owned("first", "synthetic-a"))
+        repo.importWhpuAccountTimetable(second, owned("second", "synthetic-a"))
+        val custom = repo.savePlan(PlanSpec(semesterId = second.semesterId, name = "device custom",
+            weekday = 2, startUnit = 1, endUnit = 2, weeks = listOf(1)))
+        repo.saveDisplayNameOverride(first.semesterId, "test-course", "old display")
+        repo.importWhpuAccountTimetable(first, owned("new", "synthetic-b"), replaceAccount = true)
+        assertEquals("new", repo.courses(first.semesterId).single().nameZh)
+        assertTrue(repo.cachedSessions("whpu", second.semesterId).isEmpty())
+        assertTrue(repo.whpuPractice("whpu", second.semesterId).isEmpty())
+        assertNull(repo.lastFetchedAt("whpu", second.semesterId))
+        assertEquals(custom, repo.customPlans(second.semesterId).single().code)
+        assertTrue(repo.displayOverrides(first.semesterId).isEmpty())
+        assertTrue(repo.cachedSessions("whpu-demo", WhpuScheduleMapper.DEMO_SEMESTER_ID).isNotEmpty())
+    }
+
+    @Test fun accountSwitchTransactionFailureRestoresAllTermsAndOwner() = runBlocking {
+        val first = WhpuTerm(2026, "3")
+        val second = WhpuTerm(2026, "12")
+        repo.importWhpuAccountTimetable(first, owned("first", "synthetic-a"))
+        repo.importWhpuAccountTimetable(second, owned("second", "synthetic-a"))
+        db.openHelper.writableDatabase.execSQL("""
+            CREATE TRIGGER reject_owner BEFORE INSERT ON kv_cache
+            WHEN NEW.key = 'whpu-cache-owner'
+            BEGIN SELECT RAISE(ABORT, 'test-owner-failure'); END
+        """.trimIndent())
+        val result = runCatching { repo.importWhpuAccountTimetable(first, owned("new", "synthetic-b"), true) }
+        assertTrue(result.exceptionOrNull() is SQLiteException)
+        assertEquals("first", repo.courses(first.semesterId).single().nameZh)
+        assertEquals("second", repo.courses(second.semesterId).single().nameZh)
+        assertEquals(second.semesterId, repo.currentSemester()!!.id)
+        db.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_owner")
+        repo.importWhpuAccountTimetable(first, owned("still-a", "synthetic-a"))
+    }
+
+    @Test fun sessionChangeBeforeCommitRollsBackTheReplacement() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        repo.importWhpuAccountTimetable(term, owned("old", "synthetic-a"))
+        var checks = 0
+        val result = runCatching {
+            repo.importWhpuAccountTimetable(term, owned("late", "synthetic-a"), sessionCurrent = { ++checks == 1 })
+        }
+        assertTrue(result.exceptionOrNull() is WhpuAcademicException.SessionChanged)
+        assertEquals("old", repo.courses(term.semesterId).single().nameZh)
+    }
+
+    @Test fun legacyCacheNeedsConfirmationBeforeFirstAccountBinding() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        repo.importWhpuTimetable(term, null, schedule("legacy"))
+        val result = runCatching { repo.importWhpuAccountTimetable(term, owned("bound", "synthetic-a")) }
+        assertTrue((result.exceptionOrNull() as WhpuAcademicException.AccountChangeRequired).legacyCache)
+        assertEquals("legacy", repo.courses(term.semesterId).single().nameZh)
+        repo.importWhpuAccountTimetable(term, owned("bound", "synthetic-a"), true)
+        assertEquals("bound", repo.courses(term.semesterId).single().nameZh)
+    }
+
+    @Test fun unidentifiedAccountCannotReplaceEvenWithConfirmation() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        repo.importWhpuAccountTimetable(term, owned("old", "synthetic-a"))
+        val result = runCatching { repo.importWhpuAccountTimetable(term, schedule("unknown"), true) }
+        assertTrue(result.exceptionOrNull() is WhpuAcademicException.MissingAccount)
+        assertEquals("old", repo.courses(term.semesterId).single().nameZh)
+    }
+
     @Test fun importCanPersistBeforeTheUserSelectsFirstWeekDate() = runBlocking {
         val term = WhpuTerm.YEAR_2026_FIRST
         repo.importWhpuTimetable(term, null, schedule("new"))

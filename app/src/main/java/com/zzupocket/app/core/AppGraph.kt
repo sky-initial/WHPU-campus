@@ -152,6 +152,12 @@ object AppGraph {
             whpuAcademicProvider, scheduleRepository,
         )
     }
+    val whpuImportCoordinator by lazy {
+        com.zzupocket.app.data.whpu.WhpuImportCoordinator(whpuAcademicProvider, whpuSessionManager) {
+                term, schedule, replace, current ->
+            scheduleRepository.importWhpuAccountTimetable(term, schedule, replace, current)
+        }
+    }
 
     val focusRepository: FocusRepository by lazy { FocusRepository(db) }
 
