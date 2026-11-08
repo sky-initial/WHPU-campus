@@ -164,6 +164,11 @@ object AppGraph {
             com.zzupocket.app.data.whpu.WhpuGradeProvider(whpuSessionManager), whpuSessionManager)
     }
 
+    val whpuExamRepository by lazy {
+        com.zzupocket.app.data.whpu.WhpuExamRepository(db, scheduleRepository,
+            com.zzupocket.app.data.whpu.WhpuExamProvider(whpuSessionManager), whpuSessionManager)
+    }
+
     val focusRepository: FocusRepository by lazy { FocusRepository(db) }
 
     val cardRepository: CardRepository by lazy {

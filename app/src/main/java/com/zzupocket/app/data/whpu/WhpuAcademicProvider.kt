@@ -44,9 +44,9 @@ class WhpuSessionManager : CookieJar {
     }
 
     /** CookieManager already scoped this header to the exact academic endpoint. */
-    @Synchronized fun acceptBrowserSession(header: String?, browserUserAgent: String, gradeHeader: String? = null) {
+    @Synchronized fun acceptBrowserSession(header: String?, browserUserAgent: String, gradeHeader: String? = null, examHeader: String? = null) {
         clear()
-        listOf("/kbcx" to header, "/cjcx" to gradeHeader).forEach { (path, scopedHeader) ->
+        listOf("/kbcx" to header, "/cjcx" to gradeHeader, "/kwgl" to examHeader).forEach { (path, scopedHeader) ->
             scopedHeader.orEmpty().split(';').forEach { part ->
                 val pair = part.trim().split('=', limit = 2)
                 if (pair.size == 2 && pair[0].isNotBlank()) {

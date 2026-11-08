@@ -104,8 +104,8 @@ interface KvCacheDao {
     @Query("SELECT * FROM kv_cache WHERE key = :key")
     fun observe(key: String): Flow<KvCacheEntity?>
 
-    @Query("DELETE FROM kv_cache WHERE key LIKE 'whpu-grades:%'")
-    suspend fun clearWhpuGrades()
+    @Query("DELETE FROM kv_cache WHERE key LIKE 'whpu-grades:%' OR key LIKE 'whpu-exams:%'")
+    suspend fun clearWhpuAcademicLists()
 
     @Query("SELECT * FROM kv_cache WHERE key = :key")
     suspend fun get(key: String): KvCacheEntity?

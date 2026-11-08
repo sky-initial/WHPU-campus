@@ -278,7 +278,7 @@ class ScheduleRepository(
                 if (!confirmedLegacyOwner) {
                     if (!replaceAccount) throw com.zzupocket.app.data.whpu.WhpuAcademicException.AccountChangeRequired(owner == null, accountId)
                     terms.forEach { clearTimetable("whpu", it.id) }
-                    db.kvCacheDao().clearWhpuGrades()
+                    db.kvCacheDao().clearWhpuAcademicLists()
                 }
             }
             val result = save()

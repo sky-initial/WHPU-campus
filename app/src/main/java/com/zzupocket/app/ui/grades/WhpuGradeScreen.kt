@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.whpu.*
+import com.zzupocket.app.ui.components.WhpuTermSelector
 import com.zzupocket.app.ui.components.GlassCard
 import com.zzupocket.app.ui.login.WhpuAccountChangeDialog
 import com.zzupocket.app.ui.widget.Widgets
@@ -21,7 +22,6 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -30,11 +30,11 @@ fun WhpuGradeScreen(onBack: () -> Unit, onLogin: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val today = remember { WhpuCalendar.today() }
-    var year by rememberSaveable { mutableStateOf((if (today.monthValue >= 9) today.year else today.year - 1).toString()) }
+    var year by rememberSaveable { mutableIntStateOf(if (today.monthValue >= 9) today.year else today.year - 1) }
     var code by rememberSaveable { mutableStateOf(if (today.monthValue in 2..8) "12" else "3") }
-    val term = year.toIntOrNull()?.takeIf { it in 2000..2199 }?.let { WhpuTerm(it, code) }
+    val term = WhpuTerm(year, code)
     val repository = AppGraph.whpuGradeRepository
-    val cacheFlow = remember(term) { term?.let(repository::observe) ?: flowOf(null) }
+    val cacheFlow = remember(term) { repository.observe(term) }
     val cached by cacheFlow.collectAsStateWithLifecycle(initialValue = null)
     val snapshot = cached?.takeIf { it.term == term }
     var message by remember { mutableStateOf<String?>(null) }
@@ -44,10 +44,11 @@ fun WhpuGradeScreen(onBack: () -> Unit, onLogin: () -> Unit) {
     val dateFormat = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(WhpuCalendar.zone) }
 
     fun refresh(replace: Boolean = false, legacyAccount: WhpuAccountId? = null) {
-        val selected = term ?: return
+        val selected = term
         AppGraph.whpuSessionManager.acceptBrowserSession(
             CookieManager.getInstance().getCookie(WhpuWebPolicy.SCHEDULE), WebSettings.getDefaultUserAgent(context),
             CookieManager.getInstance().getCookie(WhpuWebPolicy.GRADES),
+            CookieManager.getInstance().getCookie(WhpuWebPolicy.EXAMS),
         )
         busy = true
         message = "正在读取完整学期成绩…"
@@ -90,14 +91,12 @@ fun WhpuGradeScreen(onBack: () -> Unit, onLogin: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                OutlinedTextField(year, { year = it }, label = { Text("学年起始年") }, singleLine = true,
-                    enabled = !busy, isError = term == null, modifier = Modifier.fillMaxWidth())
+                WhpuTermSelector(term, enabled = !busy, onSelect = {
+                    year = it.year
+                    code = it.code
+                })
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(code == "3", { code = "3" }, label = { Text("第一学期") }, enabled = !busy)
-                    FilterChip(code == "12", { code = "12" }, label = { Text("第二学期") }, enabled = !busy)
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { refresh() }, enabled = !busy && term != null) { Text(if (busy) "刷新中…" else "刷新成绩") }
+                    Button(onClick = { refresh() }, enabled = !busy) { Text(if (busy) "刷新中…" else "刷新成绩") }
                     TextButton(onClick = onLogin, enabled = !busy) { Text("学校登录 / 换账号") }
                     if (job?.isActive == true) TextButton(onClick = {
                         job?.cancel(); message = "已取消刷新，原缓存保留。"
