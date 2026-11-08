@@ -31,13 +31,13 @@ import java.time.LocalDate
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Boolean = false) {
+fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Boolean = false, queryName: String = "成绩查询") {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var academicPage by remember { mutableStateOf(false) }
     var host by remember { mutableStateOf("jwglxt.whpu.edu.cn") }
-    var message by remember { mutableStateOf(if (signInOnly) "在下方学校页面完成登录，然后返回成绩查询并刷新。" else "先在下方学校页面登录，再点击“同步到课表”。导入成功后选择第一周日期。") }
+    var message by remember { mutableStateOf(if (signInOnly) "在下方学校页面完成登录，然后返回${queryName}并刷新。" else "先在下方学校页面登录，再点击“同步到课表”。导入成功后选择第一周日期。") }
     var busy by remember { mutableStateOf(false) }
     var imported by remember { mutableStateOf(false) }
     var syncJob by remember { mutableStateOf<Job?>(null) }
@@ -56,6 +56,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
         AppGraph.whpuSessionManager.acceptBrowserSession(
             CookieManager.getInstance().getCookie(WhpuWebPolicy.SCHEDULE), view.settings.userAgentString,
             CookieManager.getInstance().getCookie(WhpuWebPolicy.GRADES),
+            CookieManager.getInstance().getCookie(WhpuWebPolicy.EXAMS),
         )
         busy = true
         imported = false
@@ -144,7 +145,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                     Button(enabled = !busy && academicPage, onClick = {
                         if (signInOnly) onImported() else startSync()
                     }) {
-                        Text(if (signInOnly) "返回成绩查询" else if (busy) "同步中…" else "同步到课表")
+                        Text(if (signInOnly) "返回${queryName}" else if (busy) "同步中…" else "同步到课表")
                     }
                     if (syncJob?.isActive == true) TextButton(onClick = {
                         syncJob?.cancel()
@@ -210,7 +211,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                         override fun onPageFinished(view: WebView, url: String) {
                             academicPage = WhpuWebPolicy.isAcademic(url)
                             if (academicPage && message == "正在通过 HTTPS 返回教务系统…") {
-                                message = if (signInOnly) "已返回教务页面。登录完成后返回成绩查询并刷新。" else "已返回教务页面。完成学校登录后点击“同步到课表”，导入成功后再设置日期。"
+                                message = if (signInOnly) "已返回教务页面。登录完成后返回${queryName}并刷新。" else "已返回教务页面。完成学校登录后点击“同步到课表”，导入成功后再设置日期。"
                             }
                         }
                         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {

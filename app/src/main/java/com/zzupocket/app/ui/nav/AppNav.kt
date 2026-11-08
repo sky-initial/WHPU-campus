@@ -95,6 +95,8 @@ enum class Destination(
 
 /** 非 tab 的全屏页面：这些路由下不显示底部导航栏 */
 private const val ROUTE_LOGIN = "login"
+private const val ROUTE_EXAMS = "exams"
+private const val ROUTE_EXAM_LOGIN = "exam_login"
 private const val ROUTE_GRADES = "grades"
 private const val ROUTE_GRADE_LOGIN = "grade_login"
 private const val ROUTE_DIAGNOSTICS = "diagnostics"
@@ -239,6 +241,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         Text("校园服务", style = MaterialTheme.typography.titleLarge)
                         TextButton(onClick = { navController.navigate(ROUTE_LOGIN) }) { Text("学校登录与课表同步") }
                         TextButton(onClick = { navController.navigate(ROUTE_GRADES) }) { Text("成绩查询") }
+                        TextButton(onClick = { navController.navigate(ROUTE_EXAMS) }) { Text("考试安排") }
                         Text("校园卡、电费和图书馆正在适配。")
                         TextButton(onClick = { navController.navigate(ROUTE_APPEARANCE) }) { Text("外观设置") }
                         TextButton(onClick = { navController.navigate(ROUTE_ABOUT) }) { Text("关于") }
@@ -311,6 +314,18 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 }
                 composable(ROUTE_LIBRARY) {
                     UnavailableCampusService()
+                }
+                composable(ROUTE_EXAMS) {
+                    com.zzupocket.app.ui.exams.WhpuExamScreen(
+                        onBack = { navController.popBackStack() },
+                        onLogin = { navController.navigate(ROUTE_EXAM_LOGIN) },
+                    )
+                }
+                composable(ROUTE_EXAM_LOGIN) {
+                    com.zzupocket.app.ui.login.WhpuLoginScreen(
+                        onBack = { navController.popBackStack() },
+                        onImported = { navController.popBackStack() }, signInOnly = true, queryName = "考试安排",
+                    )
                 }
                 composable(ROUTE_GRADES) {
                     com.zzupocket.app.ui.grades.WhpuGradeScreen(
