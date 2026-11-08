@@ -238,6 +238,38 @@ class ScheduleRepository(
     suspend fun periodsForSemester(id: Int): List<Period> =
         if (WhpuTerm.fromSemesterId(id) != null) com.zzupocket.app.data.whpu.WhpuCalendar.periods() else periods()
 
+    /** Bind imported school data to the server's account identifier in the same transaction. */
+    suspend fun importWhpuAccountTimetable(
+        term: WhpuTerm,
+        schedule: com.zzupocket.app.data.whpu.WhpuSchedule,
+        replaceAccount: Boolean = false,
+        sessionCurrent: () -> Boolean = { true },
+    ) {
+        val account = schedule.accountId?.value?.takeIf { it.isNotBlank() }
+            ?: throw com.zzupocket.app.data.whpu.WhpuAcademicException.MissingAccount()
+        db.withTransaction {
+            fun checkSession() {
+                if (!sessionCurrent()) throw com.zzupocket.app.data.whpu.WhpuAcademicException.SessionChanged()
+            }
+            checkSession()
+            val ownerKey = "whpu-cache-owner"
+            val owner = db.kvCacheDao().get(ownerKey)?.payload
+            val terms = db.semesterDao().all().filter { WhpuTerm.fromSemesterId(it.id) != null }
+            val hasLegacyCache = owner == null && terms.any {
+                db.timetableSyncDao().get("whpu", it.id) != null ||
+                    db.courseSessionDao().bySemesterAndSource(it.id, "whpu").isNotEmpty() ||
+                    db.kvCacheDao().get("whpu-practice:whpu:${it.id}") != null
+            }
+            if ((owner != null && owner != account) || hasLegacyCache) {
+                if (!replaceAccount) throw com.zzupocket.app.data.whpu.WhpuAcademicException.AccountChangeRequired(owner == null)
+                terms.forEach { clearTimetable("whpu", it.id) }
+            }
+            importWhpuTimetable(term, null, schedule)
+            db.kvCacheDao().put(KvCacheEntity(ownerKey, account, System.currentTimeMillis(), 0))
+            checkSession()
+        }
+    }
+
     /** Atomically activates the imported term only after the complete response has parsed. */
     suspend fun importWhpuTimetable(
         term: WhpuTerm,
@@ -641,9 +673,8 @@ class ScheduleRepository(
         db.timetableSyncDao().observe(source, semesterId)
 
     /**
-     * 清掉某个来源、某个学期的缓存（退出登录时用）。
-     *
-     * 课表是按账号抓的，退出后不该留在设备上；`custom` 日程不在此列（那是用户自己的数据）。
+     * 清掉某个来源、某个学期的缓存，供确认换账号或明确清理时使用。
+     * 清除网页登录态保留离线课表；`custom` 日程不在本方法的学校缓存清理范围内。
      */
     suspend fun clearTimetable(source: String, semesterId: Int) {
         db.withTransaction {
@@ -654,7 +685,7 @@ class ScheduleRepository(
             db.courseDao().deleteBySemester(semesterId)
             db.timetableSyncDao().clearTerm(source, semesterId)
             db.kvCacheDao().remove("whpu-practice:$source:$semesterId")
-            // 显示覆盖跟课表同生命周期：按账号抓的数据退出后不该留在设备上
+            // 学校课程的显示修改随对应学校缓存一起清理。
             if (source != SOURCE_CUSTOM) db.displayOverrideDao().deleteBySemester(semesterId)
         }
     }

@@ -28,7 +28,13 @@ data class WhpuPracticeCourse(
     val teacher: String? = null,
     val campus: String? = null,
 )
-data class WhpuSchedule(val courses: List<WhpuCourse>, val practice: List<WhpuPracticeCourse>)
+/** Kept only in the private local cache; never include the identifier in diagnostics. */
+class WhpuAccountId(internal val value: String) {
+    override fun toString() = "WhpuAccountId(redacted)"
+}
+
+data class WhpuSchedule(val courses: List<WhpuCourse>, val practice: List<WhpuPracticeCourse>,
+    val accountId: WhpuAccountId? = null)
 
 object WhpuScheduleParser {
     private val periods = Regex("^(?:第)?\\s*(\\d+)\\s*(?:[-~－—]\\s*(\\d+))?\\s*节?$")
@@ -62,7 +68,10 @@ object WhpuScheduleParser {
                 row.text("xqmc"),
             )
         }
-        return WhpuSchedule(courses, practice)
+        // Observed school response: xsxx is an object and XH_ID is a nonempty string.
+        val account = root["xsxx"]?.jsonObject?.text("XH_ID")?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let(::WhpuAccountId)
+        return WhpuSchedule(courses, practice, account)
     }
 
     private fun JsonObject.text(key: String): String? = when (val value = this[key]) {

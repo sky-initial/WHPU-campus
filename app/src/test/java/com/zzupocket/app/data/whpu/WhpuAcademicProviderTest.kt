@@ -11,6 +11,7 @@ import okio.Buffer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.async
 
 class WhpuAcademicProviderTest {
     @Test fun requestUsesWebViewsUserAgentWithoutAddingCredentialsToUrl() {
@@ -45,7 +46,45 @@ class WhpuAcademicProviderTest {
     }
 
     @Test(expected = WhpuAcademicException.SessionExpired::class)
-    fun htmlIsExpiredSession() { provider(200, "<html>登录</html>").schedule(WhpuTerm.YEAR_2026_FIRST) }
+    fun htmlIsExpiredSession() { provider(200, "<html><input type='password'></html>").schedule(WhpuTerm.YEAR_2026_FIRST) }
+
+    @Test(expected = WhpuAcademicException.Forbidden::class)
+    fun wafHtmlDoesNotMasqueradeAsExpiredLogin() {
+        provider(200, "<html><title>waf拦截</title></html>").schedule(WhpuTerm.YEAR_2026_FIRST)
+    }
+
+    @Test(expected = WhpuAcademicException.Parse::class)
+    fun maintenanceHtmlIsNotAssumedToBeLogin() {
+        provider(200, "<html>系统维护</html>").schedule(WhpuTerm.YEAR_2026_FIRST)
+    }
+
+    @Test(expected = WhpuAcademicException.SessionExpired::class)
+    fun redirectRequiresLoginWithoutFollowingIt() {
+        provider(302, "").schedule(WhpuTerm.YEAR_2026_FIRST)
+    }
+
+    @Test fun coroutineCancellationCancelsTheOkHttpCall() = kotlinx.coroutines.runBlocking {
+        val started = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val cancelled = java.util.concurrent.CountDownLatch(1)
+        val client = OkHttpClient.Builder().eventListener(object : okhttp3.EventListener() {
+            override fun canceled(call: okhttp3.Call) { cancelled.countDown() }
+        }).addInterceptor { chain ->
+            started.countDown()
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200)
+                .message("test").body("""{"kbList":[]}""".toResponseBody()).build()
+        }.build()
+        try {
+            val job = async(kotlinx.coroutines.Dispatchers.Default) {
+                WhpuAcademicProvider(WhpuSessionManager(), client = client).fetchSchedule(WhpuTerm.YEAR_2026_FIRST)
+            }
+            assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            job.cancel()
+            job.join()
+            assertTrue(cancelled.await(2, java.util.concurrent.TimeUnit.SECONDS))
+        } finally { release.countDown() }
+    }
 
     @Test(expected = WhpuAcademicException.SessionExpired::class)
     fun unauthorizedIsExpiredSession() { provider(401, "").schedule(WhpuTerm.YEAR_2026_FIRST) }

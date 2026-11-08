@@ -5,6 +5,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WhpuWebSessionTest {
+    @Test fun inFlightCookieSnapshotCannotRestoreClearedOrNewerSession() {
+        val manager = WhpuSessionManager()
+        manager.acceptBrowserSession("JSESSIONID=synthetic-old", "old")
+        val snapshot = manager.snapshot()
+        manager.clear()
+        manager.acceptBrowserSession("JSESSIONID=synthetic-new", "new")
+        val endpoint = WhpuWebPolicy.SCHEDULE.toHttpUrl()
+        snapshot.saveFromResponse(endpoint, listOf(okhttp3.Cookie.Builder().name("JSESSIONID")
+            .value("late-response").hostOnlyDomain(endpoint.host).path("/kbcx").secure().build()))
+        assertEquals("synthetic-new", manager.loadForRequest(endpoint).single().value)
+        assertEquals("new", manager.userAgent)
+    }
     @Test fun academicReturnUsesHttpsAndPreservesEncodedPathAndQuery() {
         val original = "http://jwglxt.whpu.edu.cn:80/xtgl/login_slogin.html?ticket=synthetic%2Bvalue%3D&service=a%2Fb#tab"
         val upgraded = WhpuWebPolicy.academicHttpsRedirect(original, "GET", true)

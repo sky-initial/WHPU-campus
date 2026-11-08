@@ -9,6 +9,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 
 data class WhpuTerm(val year: Int, val code: String) {
     val semesterId: Int get() = 1_000_000 + year * 10 + if (code == "3") 1 else 2
@@ -25,12 +33,20 @@ data class WhpuTerm(val year: Int, val code: String) {
 
 interface WhpuScheduleProvider {
     fun schedule(term: WhpuTerm): WhpuSchedule
+    suspend fun fetchSchedule(term: WhpuTerm): WhpuSchedule = withContext(Dispatchers.IO) { schedule(term) }
 }
 
 class WhpuSessionManager : CookieJar {
     private val cookies = mutableListOf<Cookie>()
     @Volatile var userAgent: String? = null
         private set
+    @Volatile var revision: Long = 0
+        private set
+
+    @Synchronized fun snapshot(): WhpuSessionManager = WhpuSessionManager().also {
+        it.cookies.addAll(cookies)
+        it.userAgent = userAgent
+    }
 
     /** CookieManager already scoped this header to the exact academic endpoint. */
     @Synchronized fun acceptBrowserSession(header: String?, browserUserAgent: String) {
@@ -58,7 +74,7 @@ class WhpuSessionManager : CookieJar {
         return cookies.filter { it.matches(url) }
     }
 
-    @Synchronized fun clear() { cookies.clear(); userAgent = null }
+    @Synchronized fun clear() { cookies.clear(); userAgent = null; revision++ }
 }
 
 sealed class WhpuAcademicException(message: String, cause: Throwable? = null) : Exception(message, cause) {
@@ -67,10 +83,13 @@ sealed class WhpuAcademicException(message: String, cause: Throwable? = null) : 
     class Forbidden : WhpuAcademicException("没有访问权限")
     class Http(val code: Int) : WhpuAcademicException("教务请求失败 ($code)")
     class Parse(cause: Throwable) : WhpuAcademicException("课表数据解析失败", cause)
+    class MissingAccount : WhpuAcademicException("响应缺少账号标识")
+    class AccountChangeRequired(val legacyCache: Boolean) : WhpuAcademicException("需要确认课表账号切换")
+    class SessionChanged : WhpuAcademicException("登录状态已变化")
 }
 
 class WhpuAcademicProvider(
-    session: CookieJar,
+    private val session: CookieJar,
     private val endpoint: String = "https://jwglxt.whpu.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151",
     client: OkHttpClient = OkHttpClient(),
     private val userAgent: () -> String? = { null },
@@ -79,7 +98,8 @@ class WhpuAcademicProvider(
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false).build()
 
-    override fun schedule(term: WhpuTerm): WhpuSchedule {
+    private fun call(term: WhpuTerm): Call {
+        val snapshot = (session as? WhpuSessionManager)?.snapshot()
         val form = FormBody.Builder().add("xnm", term.year.toString()).add("xqm", term.code)
             .add("kzlx", "ck").add("xsdm", "").add("kclbdm", "").add("kclxdm", "").build()
         val request = Request.Builder().url(endpoint).post(form)
@@ -88,10 +108,36 @@ class WhpuAcademicProvider(
             .header("Origin", "https://jwglxt.whpu.edu.cn")
             .header("Referer", "https://jwglxt.whpu.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default")
             .header("X-Requested-With", "XMLHttpRequest")
-            .apply { userAgent()?.let { header("User-Agent", it) } }.build()
-        val response = try { client.newCall(request).execute() } catch (e: IOException) {
+            .apply { (snapshot?.userAgent ?: userAgent())?.let { header("User-Agent", it) } }.build()
+        return (snapshot?.let { client.newBuilder().cookieJar(it).build() } ?: client).newCall(request)
+    }
+
+    override fun schedule(term: WhpuTerm): WhpuSchedule {
+        val response = try { call(term).execute() } catch (e: IOException) {
             throw WhpuAcademicException.Network(e)
         }
+        return parse(response)
+    }
+
+    override suspend fun fetchSchedule(term: WhpuTerm): WhpuSchedule = suspendCancellableCoroutine { continuation ->
+        val call = call(term)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(WhpuAcademicException.Network(e))
+            }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val result = parse(response)
+                    if (continuation.isActive) continuation.resume(result)
+                } catch (e: Exception) {
+                    if (continuation.isActive) continuation.resumeWithException(e)
+                }
+            }
+        })
+    }
+
+    private fun parse(response: Response): WhpuSchedule {
         response.use {
             when {
                 it.code == 401 || it.isRedirect -> throw WhpuAcademicException.SessionExpired()
@@ -101,7 +147,13 @@ class WhpuAcademicProvider(
             val body = try { it.body?.string().orEmpty() } catch (e: IOException) {
                 throw WhpuAcademicException.Network(e)
             }
-            if (body.trimStart().startsWith("<")) throw WhpuAcademicException.SessionExpired()
+            if (body.trimStart().startsWith("<")) {
+                if (body.contains("waf拦截", ignoreCase = true)) throw WhpuAcademicException.Forbidden()
+                if (Regex("type\\s*=\\s*['\"]?password|login_slogin|cas/login", RegexOption.IGNORE_CASE).containsMatchIn(body)) {
+                    throw WhpuAcademicException.SessionExpired()
+                }
+                throw WhpuAcademicException.Parse(IllegalArgumentException("Unexpected HTML response"))
+            }
             return try { WhpuScheduleParser.parse(body) } catch (e: Exception) {
                 throw WhpuAcademicException.Parse(e)
             }
