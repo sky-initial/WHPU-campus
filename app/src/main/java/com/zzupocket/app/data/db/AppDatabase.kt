@@ -102,6 +102,12 @@ interface AppSettingsDao {
 interface KvCacheDao {
 
     @Query("SELECT * FROM kv_cache WHERE key = :key")
+    fun observe(key: String): Flow<KvCacheEntity?>
+
+    @Query("DELETE FROM kv_cache WHERE key LIKE 'whpu-grades:%'")
+    suspend fun clearWhpuGrades()
+
+    @Query("SELECT * FROM kv_cache WHERE key = :key")
     suspend fun get(key: String): KvCacheEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -244,10 +244,23 @@ class ScheduleRepository(
         schedule: com.zzupocket.app.data.whpu.WhpuSchedule,
         replaceAccount: Boolean = false,
         sessionCurrent: () -> Boolean = { true },
+        legacyAccount: com.zzupocket.app.data.whpu.WhpuAccountId? = null,
     ) {
-        val account = schedule.accountId?.value?.takeIf { it.isNotBlank() }
+        val account = schedule.accountId ?: throw com.zzupocket.app.data.whpu.WhpuAcademicException.MissingAccount()
+        withWhpuAccount(account, replaceAccount, sessionCurrent, legacyAccount) { importWhpuTimetable(term, null, schedule) }
+    }
+
+    /** One owner for all school caches; the caller's complete snapshot is saved in this transaction. */
+    internal suspend fun <T> withWhpuAccount(
+        accountId: com.zzupocket.app.data.whpu.WhpuAccountId,
+        replaceAccount: Boolean = false,
+        sessionCurrent: () -> Boolean = { true },
+        legacyAccount: com.zzupocket.app.data.whpu.WhpuAccountId? = null,
+        save: suspend () -> T,
+    ): T {
+        val account = accountId.value.takeIf { it.isNotBlank() }
             ?: throw com.zzupocket.app.data.whpu.WhpuAcademicException.MissingAccount()
-        db.withTransaction {
+        return db.withTransaction {
             fun checkSession() {
                 if (!sessionCurrent()) throw com.zzupocket.app.data.whpu.WhpuAcademicException.SessionChanged()
             }
@@ -261,12 +274,17 @@ class ScheduleRepository(
                     db.kvCacheDao().get("whpu-practice:whpu:${it.id}") != null
             }
             if ((owner != null && owner != account) || hasLegacyCache) {
-                if (!replaceAccount) throw com.zzupocket.app.data.whpu.WhpuAcademicException.AccountChangeRequired(owner == null)
-                terms.forEach { clearTimetable("whpu", it.id) }
+                val confirmedLegacyOwner = hasLegacyCache && legacyAccount?.value == account
+                if (!confirmedLegacyOwner) {
+                    if (!replaceAccount) throw com.zzupocket.app.data.whpu.WhpuAcademicException.AccountChangeRequired(owner == null, accountId)
+                    terms.forEach { clearTimetable("whpu", it.id) }
+                    db.kvCacheDao().clearWhpuGrades()
+                }
             }
-            importWhpuTimetable(term, null, schedule)
+            val result = save()
             db.kvCacheDao().put(KvCacheEntity(ownerKey, account, System.currentTimeMillis(), 0))
             checkSession()
+            result
         }
     }
 

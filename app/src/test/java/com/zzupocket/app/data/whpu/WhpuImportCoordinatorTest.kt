@@ -18,7 +18,7 @@ class WhpuImportCoordinatorTest {
     @Test fun successfulEmptyScheduleStillHasAnAccountAndCanReplaceCache() = runTest {
         var saves = 0
         val session = WhpuSessionManager()
-        WhpuImportCoordinator(provider { payload() }, session) { _, data, replace, current ->
+        WhpuImportCoordinator(provider { payload() }, session) { _, data, replace, current, _ ->
             assertNotNull(data.accountId); assertFalse(replace); assertTrue(current()); saves++
         }.import(term)
         assertEquals(1, saves)
@@ -28,7 +28,7 @@ class WhpuImportCoordinatorTest {
         var saved = false
         val result = runCatching {
             WhpuImportCoordinator(provider { WhpuSchedule(emptyList(), emptyList()) }, WhpuSessionManager()) {
-                    _, _, _, _ -> saved = true
+                    _, _, _, _, _ -> saved = true
             }.import(term)
         }
         assertTrue(result.exceptionOrNull() is WhpuAcademicException.MissingAccount)
@@ -43,7 +43,7 @@ class WhpuImportCoordinatorTest {
         var saved = false
         val job = async {
             WhpuImportCoordinator(provider { started.complete(Unit); response.await() }, session) {
-                    _, _, _, _ -> saved = true
+                    _, _, _, _, _ -> saved = true
             }.import(term)
         }
         started.await()
@@ -58,7 +58,7 @@ class WhpuImportCoordinatorTest {
         var saved = false
         val result = runCatching {
             WhpuImportCoordinator(provider { session.clear(); payload() }, session) {
-                    _, _, _, _ -> saved = true
+                    _, _, _, _, _ -> saved = true
             }.import(term)
         }
         assertTrue(result.exceptionOrNull() is WhpuAcademicException.SessionChanged)
@@ -70,7 +70,7 @@ class WhpuImportCoordinatorTest {
         var saved = false
         val result = runCatching {
             WhpuImportCoordinator(provider { throw WhpuAcademicException.SessionExpired() }, session) {
-                    _, _, _, _ -> saved = true
+                    _, _, _, _, _ -> saved = true
             }.import(term)
         }
         assertTrue(result.exceptionOrNull() is WhpuAcademicException.SessionExpired)
@@ -84,7 +84,7 @@ class WhpuImportCoordinatorTest {
             WhpuImportCoordinator(provider {
                 session.acceptBrowserSession("JSESSIONID=synthetic-new", "new-browser")
                 throw WhpuAcademicException.SessionExpired()
-            }, session) { _, _, _, _ -> fail("Must not write") }.import(term)
+            }, session) { _, _, _, _, _ -> fail("Must not write") }.import(term)
         }
         assertEquals("new-browser", session.userAgent)
     }
@@ -95,7 +95,7 @@ class WhpuImportCoordinatorTest {
                 val session = WhpuSessionManager().apply { acceptBrowserSession("JSESSIONID=synthetic", "test") }
                 val revision = session.revision
                 val result = runCatching {
-                    WhpuImportCoordinator(provider { throw failure }, session) { _, _, _, _ -> fail("Must not write") }
+                    WhpuImportCoordinator(provider { throw failure }, session) { _, _, _, _, _ -> fail("Must not write") }
                         .import(term, replaceAccount = true)
                 }
                 assertSame(failure, result.exceptionOrNull())
@@ -106,5 +106,13 @@ class WhpuImportCoordinatorTest {
     @Test fun accountIdentifierNeverAppearsInModelDiagnosticString() {
         assertFalse(payload().toString().contains("synthetic-account"))
         assertNull(WhpuScheduleParser.parse("""{"kbList":[],"xsxx":{"XH_ID":" "}}""").accountId)
+    }
+
+    @Test fun legacyConfirmationIsForwardedForTheSpecificAccount() = runTest {
+        val confirmed = WhpuAccountId("synthetic-account")
+        WhpuImportCoordinator(provider { payload() }, WhpuSessionManager()) { _, _, replace, _, legacy ->
+            assertFalse(replace)
+            assertSame(confirmed, legacy)
+        }.import(term, legacyAccount = confirmed)
     }
 }

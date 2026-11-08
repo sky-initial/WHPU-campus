@@ -95,6 +95,8 @@ enum class Destination(
 
 /** 非 tab 的全屏页面：这些路由下不显示底部导航栏 */
 private const val ROUTE_LOGIN = "login"
+private const val ROUTE_GRADES = "grades"
+private const val ROUTE_GRADE_LOGIN = "grade_login"
 private const val ROUTE_DIAGNOSTICS = "diagnostics"
 private const val ROUTE_OVERVIEW = "course_overview"
 private const val ROUTE_DISPLAY = "display_settings"
@@ -234,8 +236,9 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 }
                 composable(Destination.CAMPUS.route) {
                     Column(Modifier.statusBarsPadding().padding(24.dp)) {
-                        Text("校园服务暂未接入", style = MaterialTheme.typography.titleLarge)
+                        Text("校园服务", style = MaterialTheme.typography.titleLarge)
                         TextButton(onClick = { navController.navigate(ROUTE_LOGIN) }) { Text("学校登录与课表同步") }
+                        TextButton(onClick = { navController.navigate(ROUTE_GRADES) }) { Text("成绩查询") }
                         Text("校园卡、电费和图书馆正在适配。")
                         TextButton(onClick = { navController.navigate(ROUTE_APPEARANCE) }) { Text("外观设置") }
                         TextButton(onClick = { navController.navigate(ROUTE_ABOUT) }) { Text("关于") }
@@ -308,6 +311,18 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 }
                 composable(ROUTE_LIBRARY) {
                     UnavailableCampusService()
+                }
+                composable(ROUTE_GRADES) {
+                    com.zzupocket.app.ui.grades.WhpuGradeScreen(
+                        onBack = { navController.popBackStack() },
+                        onLogin = { navController.navigate(ROUTE_GRADE_LOGIN) },
+                    )
+                }
+                composable(ROUTE_GRADE_LOGIN) {
+                    com.zzupocket.app.ui.login.WhpuLoginScreen(
+                        onBack = { navController.popBackStack() },
+                        onImported = { navController.popBackStack() }, signInOnly = true,
+                    )
                 }
                 composable(ROUTE_LOGIN) {
                     com.zzupocket.app.ui.login.WhpuLoginScreen(
