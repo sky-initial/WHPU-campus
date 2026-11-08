@@ -50,4 +50,27 @@ class WhpuScheduleParserTest {
         assertEquals("示例实践", schedule.practice.single().name)
         assertEquals(emptySet<Int>(), schedule.practice.single().weeks)
     }
+
+    @Test fun observedPracticeFieldsTakePriorityOverLegacyFields() {
+        val result = WhpuScheduleParser.parse("""{"kbList":[],"sjkList":[
+            {"kcmc":"示例实践","qsjsz":"19周","zcd":"1周","jsxm":"教师甲","xm":"教师乙"}
+        ]}""").practice.single()
+        assertEquals(setOf(19), result.weeks)
+        assertEquals("教师甲", result.teacher)
+    }
+
+    @Test fun legacyPracticeCacheStillReadsWeeksAndTeacher() {
+        val result = WhpuScheduleParser.parse("""{"kbList":[],"sjkList":[
+            {"kcmc":"示例实践","zcd":"3-4周","xm":"示例教师"}
+        ]}""").practice.single()
+        assertEquals(setOf(3, 4), result.weeks)
+        assertEquals("示例教师", result.teacher)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun malformedObservedPracticeWeeksAreNotSilentlyDropped() {
+        WhpuScheduleParser.parse("""{"kbList":[],"sjkList":[
+            {"kcmc":"示例实践","qsjsz":"未知","zcd":"1周"}
+        ]}""")
+    }
 }

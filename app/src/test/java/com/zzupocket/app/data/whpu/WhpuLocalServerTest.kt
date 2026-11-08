@@ -35,10 +35,11 @@ class WhpuLocalServerTest {
                             check(count > 0)
                             read += count
                         }
-                        val payload = """{"kbList":[],"sjkList":[]}"""
+                        val payload = WhpuObservedScheduleTest.fixture().toByteArray(Charsets.UTF_8)
                         val response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" +
-                            "Content-Length: ${payload.length}\r\nConnection: close\r\n\r\n$payload"
+                            "Content-Length: ${payload.size}\r\nConnection: close\r\n\r\n"
                         socket.getOutputStream().write(response.toByteArray(Charsets.US_ASCII))
+                        socket.getOutputStream().write(payload)
                         headers.joinToString("\n") to String(chars)
                     }
                 }
@@ -52,7 +53,9 @@ class WhpuLocalServerTest {
                 assertTrue(headers.contains("POST /kbcx?gnmkdm=N2151 HTTP/1.1"))
                 assertTrue(headers.contains("Cookie: JSESSIONID=mock-session", ignoreCase = true))
                 assertEquals("xnm=2026&xqm=3&kzlx=ck&xsdm=&kclbdm=&kclxdm=", form)
-                assertTrue(result.courses.isEmpty())
+                assertEquals(27, result.courses.size)
+                assertEquals(setOf(1, 2, 3), result.practice.first().weeks)
+                assertEquals("教师1", result.practice[1].teacher)
             } finally {
                 executor.shutdownNow()
             }

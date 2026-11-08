@@ -48,6 +48,7 @@ class ScheduleRepository(
     private val demoMutex = Mutex()
 
     suspend fun ensureDemoTimetable() = demoMutex.withLock {
+        if (db.semesterDao().current()?.id?.let { WhpuTerm.fromSemesterId(it) } != null) return@withLock
         val id = WhpuScheduleMapper.DEMO_SEMESTER_ID
         if (lastFetchedAt(WhpuScheduleMapper.DEMO_SOURCE, id) != null) {
             val key = "whpu-practice:${WhpuScheduleMapper.DEMO_SOURCE}:$id"
@@ -234,6 +235,40 @@ class ScheduleRepository(
 
     suspend fun periods(): List<Period> = db.periodDao().all().map { it.toDomain() }
 
+    suspend fun periodsForSemester(id: Int): List<Period> =
+        if (WhpuTerm.fromSemesterId(id) != null) com.zzupocket.app.data.whpu.WhpuCalendar.periods() else periods()
+
+    /** Atomically activates the imported term only after the complete response has parsed. */
+    suspend fun importWhpuTimetable(
+        term: WhpuTerm,
+        weekOneMonday: LocalDate?,
+        schedule: com.zzupocket.app.data.whpu.WhpuSchedule,
+    ) {
+        require(weekOneMonday == null || weekOneMonday.dayOfWeek == java.time.DayOfWeek.MONDAY)
+        require(term.year in 2000..2199 && term.code in setOf("3", "12"))
+        val id = term.semesterId
+        val startDate = weekOneMonday ?: semester(id)?.startDate
+        val periods = com.zzupocket.app.data.whpu.WhpuCalendar.periods().associateBy { it.indexNo }
+        val sessions = WhpuScheduleMapper.sessions(schedule, id, "whpu").map { session ->
+            session.copy(startTime = periods[session.startUnit]?.startText,
+                endTime = periods[session.endUnit]?.endText)
+        }
+        require(sessions.all { it.startTime != null && it.endTime != null }) { "Unsupported course periods" }
+        val maxWeek = (schedule.courses.flatMap { it.weeks } + schedule.practice.flatMap { it.weeks })
+            .maxOrNull() ?: semester(id)?.weekCount ?: 1
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            saveTimetable("whpu", id, sessions, WhpuScheduleMapper.courses(sessions), now,
+                kotlinx.serialization.json.JsonArray(schedule.practice.map { it.raw }).toString())
+            db.semesterDao().clearCurrent()
+            db.semesterDao().upsertAll(listOf(SemesterEntity(
+                id, "whpu:${term.year}:${term.code}", "${term.year}-${term.year + 1}-${if (term.code == "3") 1 else 2}",
+                "${term.year}-${term.year + 1}", startDate?.toString(), null, false,
+                (1..maxWeek).joinToString(","), true, now,
+            )))
+        }
+    }
+
     suspend fun semesters(): List<Semester> = db.semesterDao().all().map { it.toDomain() }
 
     suspend fun semester(id: Int): Semester? =
@@ -415,7 +450,7 @@ class ScheduleRepository(
         // 先删旧行：改了周次/时段之后不能留下孤儿记录
         dao.deleteByCourseKey(courseKeyOf(spec.semesterId, code))
 
-        val periods = periods().associateBy { it.indexNo }
+        val periods = periodsForSemester(spec.semesterId).associateBy { it.indexNo }
         val startTime = periods[spec.startUnit]?.startText
         val endTime = periods[spec.endUnit]?.endText
         val now = System.currentTimeMillis()

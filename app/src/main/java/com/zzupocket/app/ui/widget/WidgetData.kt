@@ -117,15 +117,15 @@ object WidgetData {
         val repo = AppGraph.scheduleRepository
         repo.ensureDemoTimetable()
         val prefsStore = AppGraph.uiPrefsStore
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         val tomorrow = today.plusDays(1)
-        val nowMin = LocalTime.now().let { it.hour * 60 + it.minute }
+        val nowMin = com.zzupocket.app.data.whpu.WhpuCalendar.now().let { it.hour * 60 + it.minute }
         val nowMillis = System.currentTimeMillis()
 
         // 本科 + 研究生统一口径（研究生账号没有学期行，也照样能取到今天/明天的课）
         val hasSchedule = com.zzupocket.app.data.repo.TodayTimetable
             .hasAnySchedule(repo, prefsStore)
-        val periods = repo.periods()
+        val periods = repo.currentSemester()?.let { repo.periodsForSemester(it.id) } ?: repo.periods()
         val week = com.zzupocket.app.data.repo.TodayTimetable.currentWeekAt(repo, prefsStore, today)
 
         val todayCourses = com.zzupocket.app.data.repo.TodayTimetable
@@ -194,7 +194,7 @@ object WidgetData {
         // 「可用约 N 天」的窗口与算法都在 EnergyStats 里（DAYS_LEFT_WINDOW_DAYS / recentDailyAverage），
         // App 电费页用的是同一个 —— 两处各写一份窗口正是"组件说 28 天、App 说 15.9 天"的来源。
         val since = EnergyStats.dayStart(
-            LocalDate.now().minusDays((EnergyStats.DAYS_LEFT_WINDOW_DAYS - 1).toLong()),
+            com.zzupocket.app.data.whpu.WhpuCalendar.today().minusDays((EnergyStats.DAYS_LEFT_WINDOW_DAYS - 1).toLong()),
         )
         val lightAvg = if (lightRoom.isBlank()) 0.0 else runCatching {
             EnergyStats.recentDailyAverage(

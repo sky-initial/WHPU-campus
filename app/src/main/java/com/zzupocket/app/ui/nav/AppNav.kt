@@ -235,7 +235,8 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 composable(Destination.CAMPUS.route) {
                     Column(Modifier.statusBarsPadding().padding(24.dp)) {
                         Text("校园服务暂未接入", style = MaterialTheme.typography.titleLarge)
-                        Text("登录、教务查询、校园卡、电费和图书馆正在适配。")
+                        TextButton(onClick = { navController.navigate(ROUTE_LOGIN) }) { Text("学校登录与课表同步") }
+                        Text("校园卡、电费和图书馆正在适配。")
                         TextButton(onClick = { navController.navigate(ROUTE_APPEARANCE) }) { Text("外观设置") }
                         TextButton(onClick = { navController.navigate(ROUTE_ABOUT) }) { Text("关于") }
                     }
@@ -246,7 +247,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 composable(ROUTE_ABOUT) {
                     Column(Modifier.statusBarsPadding().padding(24.dp)) {
                         Text("WHPU Pocket", style = MaterialTheme.typography.titleLarge)
-                        Text("当前展示虚构演示课表。学校认证及校园服务暂未接入。")
+                        Text("支持学校页面登录与课表同步，未导入时展示虚构演示课表。其他校园服务正在适配。")
                         Text("基于 ZZUPocket 开发，保留原项目 MIT 许可证及版权声明。")
                         TextButton(onClick = { navController.popBackStack() }) { Text("返回") }
                     }
@@ -309,7 +310,10 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     UnavailableCampusService()
                 }
                 composable(ROUTE_LOGIN) {
-                    UnavailableCampusService()
+                    com.zzupocket.app.ui.login.WhpuLoginScreen(
+                        onBack = { navController.popBackStack() },
+                        onImported = { navController.popBackStack(); switchTab(Destination.SCHEDULE.route) },
+                    )
                 }
                 composable(ROUTE_DIAGNOSTICS) {
                     UnavailableCampusService()

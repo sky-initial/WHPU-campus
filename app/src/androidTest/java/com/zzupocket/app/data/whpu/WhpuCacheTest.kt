@@ -49,6 +49,95 @@ class WhpuCacheTest {
         assertSnapshot("old")
     }
 
+    @Test fun realImportActivatesUserDatedTermAndKeepsDemoAndCustomData() = runBlocking {
+        repo.ensureDemoTimetable()
+        val demo = repo.cachedSessions("whpu-demo", WhpuScheduleMapper.DEMO_SEMESTER_ID)
+        val term = WhpuTerm.YEAR_2026_FIRST
+        val monday = java.time.LocalDate.of(2026, 9, 7)
+        val schedule = WhpuScheduleParser.parse("""{"kbList":[
+          {"kcmc":"示例晚课","kch":"test-evening","xqj":"1","jcs":"9-11","zcd":"1-2周"}
+        ],"sjkList":[{"kcmc":"示例实践","qsjsz":"19周","jsxm":"教师甲"}]}""")
+        repo.importWhpuTimetable(term, monday, schedule)
+        val custom = repo.savePlan(PlanSpec(semesterId = term.semesterId, name = "test custom",
+            weekday = 2, startUnit = 3, endUnit = 4, weeks = listOf(1)))
+        repo.importWhpuTimetable(term, monday.plusWeeks(1), schedule)
+        db.close()
+        openRepository()
+        assertEquals(term.semesterId, repo.currentSemester()!!.id)
+        assertEquals(monday.plusWeeks(1), repo.currentSemester()!!.startDate)
+        assertEquals("18:15", repo.cachedSessions("whpu", term.semesterId).first().startTime)
+        assertEquals("20:50", repo.cachedSessions("whpu", term.semesterId).first().endTime)
+        assertEquals("10:10", repo.cachedSessions(ScheduleRepository.SOURCE_CUSTOM, term.semesterId).single().startTime)
+        assertEquals(custom, repo.customPlans(term.semesterId).single().code)
+        assertEquals(setOf(19), repo.whpuPractice("whpu", term.semesterId).single().weeks)
+        repo.ensureDemoTimetable()
+        assertEquals(term.semesterId, repo.currentSemester()!!.id)
+        assertEquals(demo, repo.cachedSessions("whpu-demo", WhpuScheduleMapper.DEMO_SEMESTER_ID))
+    }
+
+    @Test fun termActivationFailureRollsBackImportedCourses() = runBlocking {
+        repo.ensureDemoTimetable()
+        db.openHelper.writableDatabase.execSQL("""
+            CREATE TRIGGER reject_term BEFORE INSERT ON semesters
+            BEGIN SELECT RAISE(ABORT, 'test-term-failure'); END
+        """.trimIndent())
+        val term = WhpuTerm.YEAR_2026_FIRST
+        val result = runCatching { repo.importWhpuTimetable(term, java.time.LocalDate.of(2026, 9, 7), schedule("new")) }
+        assertTrue(result.exceptionOrNull() is SQLiteException)
+        assertEquals(WhpuScheduleMapper.DEMO_SEMESTER_ID, repo.currentSemester()!!.id)
+        assertTrue(repo.cachedSessions("whpu", term.semesterId).isEmpty())
+        assertTrue(repo.whpuPractice("whpu", term.semesterId).isEmpty())
+        assertNull(repo.lastFetchedAt("whpu", term.semesterId))
+    }
+
+    @Test fun importCanPersistBeforeTheUserSelectsFirstWeekDate() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        repo.importWhpuTimetable(term, null, schedule("new"))
+        db.close()
+        openRepository()
+        assertEquals(term.semesterId, repo.currentSemester()!!.id)
+        assertNull(repo.currentSemester()!!.startDate)
+        assertTrue(repo.cachedSessions("whpu", term.semesterId).isNotEmpty())
+        assertTrue(repo.whpuPractice("whpu", term.semesterId).isNotEmpty())
+        assertNull(repo.resolveCurrentWeek(repo.currentSemester()!!, java.time.LocalDate.of(2026, 9, 7)))
+    }
+
+    @Test fun reimportWithoutDatePreservesThePreviouslyChosenStart() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        val monday = java.time.LocalDate.of(2026, 9, 7)
+        repo.importWhpuTimetable(term, monday, schedule("old"))
+        repo.importWhpuTimetable(term, null, schedule("new"))
+        assertEquals(monday, repo.currentSemester()!!.startDate)
+        assertEquals("new", repo.courses(term.semesterId).single().nameZh)
+    }
+
+    @Test fun invalidMondayDoesNotActivateOrWriteTerm() = runBlocking {
+        val term = WhpuTerm.YEAR_2026_FIRST
+        val result = runCatching { repo.importWhpuTimetable(term, java.time.LocalDate.of(2026, 9, 8), schedule("new")) }
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+        assertNull(repo.currentSemester())
+        assertTrue(repo.cachedSessions("whpu", term.semesterId).isEmpty())
+    }
+
+    @Test fun observedPracticeFieldsSurviveDatabaseReopen() = runBlocking {
+        val provider = object : WhpuScheduleProvider {
+            override fun schedule(term: WhpuTerm) = WhpuScheduleParser.parse("""
+                {"kbList":[],"sjkList":[
+                  {"kcmc":"示例实习","qsjsz":"1-3周","jsxm":"教师甲,教师乙","sfsjk":"1","xqmc":"示例校区"},
+                  {"kcmc":"示例课程设计","qsjsz":"19周","jsxm":"教师丙","xqmc":"示例校区"}
+                ]}
+            """.trimIndent())
+        }
+        WhpuAcademicRepository(provider, repo).refresh(WhpuTerm.YEAR_2026_FIRST, TERM)
+        db.close()
+        openRepository()
+        val practice = repo.whpuPractice(SOURCE, TERM)
+        assertEquals(listOf(setOf(1, 2, 3), setOf(19)), practice.map { it.weeks })
+        assertEquals(listOf("教师甲,教师乙", "教师丙"), practice.map { it.teacher })
+        assertTrue(practice.all { it.campus == "示例校区" })
+        assertFalse(practice[1].raw.containsKey("sfsjk"))
+    }
+
     @Test fun failedRefreshRetainsCoursesPracticeAndFetchTime() = runBlocking {
         saveSnapshot("old")
         val provider = object : WhpuScheduleProvider {

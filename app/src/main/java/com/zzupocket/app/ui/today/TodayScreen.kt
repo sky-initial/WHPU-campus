@@ -1,5 +1,7 @@
 package com.zzupocket.app.ui.today
 
+import com.zzupocket.app.core.AppGraph
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -84,6 +86,8 @@ fun TodayScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val timeline by timelineVm.state.collectAsStateWithLifecycle()
     val card by cardVm.state.collectAsStateWithLifecycle()
+    val semesters by AppGraph.scheduleRepository.observeSemesters().collectAsStateWithLifecycle(initialValue = emptyList())
+    val realSchedule = semesters.any { it.isCurrent && com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(it.id) != null }
 
     // 从登录页返回、或从后台切回来时重新确认登录态并补一次刷新。
     // 少了这一步，登录成功回到「今天」仍会显示"未登录"——因为 ViewModel 不会重建。
@@ -119,7 +123,12 @@ fun TodayScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            DemoPromptCard(onOpenSchedule)
+            if (realSchedule) {
+                Text("学校课表 · 本地缓存 · 北京时间", style = MaterialTheme.typography.labelMedium)
+            } else {
+                DemoPromptCard(onOpenSchedule)
+                Button(onClick = onOpenLogin) { Text("登录学校并导入课表") }
+            }
 
             // ① 今天的时间轴：上课 / 已完成的专注（课间空档不画，见 TodayTimelineCard 的注释）
             TodayTimelineCard(state = timeline, onOpenSchedule = onOpenSchedule)
@@ -175,7 +184,7 @@ private fun DemoPromptCard(onOpenSchedule: () -> Unit) {
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("演示模式", style = MaterialTheme.typography.titleMedium)
-            Text("当前课表、校区和作息均为示例。学校认证与校园服务暂未接入。", style = MaterialTheme.typography.bodyMedium)
+            Text("当前课表、校区和作息均为示例，可登录学校导入真实课表。", style = MaterialTheme.typography.bodyMedium)
             Button(onClick = onOpenSchedule) {
                 Text("查看演示课表")
             }

@@ -133,6 +133,7 @@ data class ScheduleUiState(
     /** 补录保存/删除成功后的一次性确认（桌面小组件刷新已同步发生，无感失败也有开屏兜底） */
     val planNotice: String? = null,
     val detailCourse: Course? = null,
+    val detailSession: Session? = null,
     /** detailCourse 的显示覆盖（名称 + 各时段教室）；null = 没查到/没有 */
     val detailOverrides: DisplayOverridesView? = null,
 ) {
@@ -289,7 +290,7 @@ class ScheduleViewModel : ViewModel() {
      * 立刻画出网格。之后是否联网由调用方按 TTL 判断。
      */
     private suspend fun publishGmsFromCache(sessions: List<Session>, fetchedAt: Long?) {
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         val settings = runCatching { uiPrefs.weekSettings(GmsScheduleMapper.GRAD_SEMESTER_ID) }
             .getOrDefault(com.zzupocket.app.core.WeekSettings())
         val weeks = sessions.map { it.weekIndex }.distinct().sorted()
@@ -380,7 +381,7 @@ class ScheduleViewModel : ViewModel() {
                     }
                     return@onSuccess
                 }
-                val today = LocalDate.now()
+                val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
                 val guess = GmsWeekAlign.guess(entries, current)
                 val periods = _state.value.periods.ifEmpty { GmsScheduleMapper.defaultPeriods() }
                 val sessions = GmsScheduleMapper.toSessions(entries, periods)
@@ -512,6 +513,24 @@ cacheNoticeNeedsLogin = expired,
     fun onResume() {
         // 从「课程表设置」改完周次参数回来：先把新参数读进来（纯本地，不联网）
         viewModelScope.launch { reloadWeekSettings() }
+        if (_state.value.started && !_state.value.gradMode) {
+            viewModelScope.launch {
+                val current = repo.currentSemester()
+                val previous = _state.value.allSemesters.firstOrNull { it.isCurrent }
+                if (current?.id != previous?.id) bootstrap()
+                else _state.value.selectedSemester?.let { selected ->
+                    val fresh = repo.semester(selected.id) ?: selected
+                    val source = if (com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(selected.id) != null) "whpu" else "whpu-demo"
+                    if (fresh != selected || repo.lastFetchedAt(source, selected.id) != _state.value.dataFetchedAt) {
+                        val all = repo.semesters()
+                        val (visible, _) = applyYearFilter(all)
+                        _state.update { it.copy(allSemesters = all, semesters = visible) }
+                        loadSemester(fresh, loggedIn = false, forceSync = false)
+                    } else resyncWeekIfDayChanged()
+                }
+            }
+            return
+        }
         if (!_state.value.started) {
             viewModelScope.launch { bootstrap() }
         } else if (_state.value.loggedIn != auth.isLoggedIn()) {
@@ -519,7 +538,7 @@ cacheNoticeNeedsLogin = expired,
         } else if (_state.value.gradMode) {
             // 研究生周次是用「本周课表」反推的；跨天后重新对齐一次。
             // 同一天切回课表页不重复拉取（3 个请求），避免无谓流量。
-            if (_state.value.gmsWeekResolvedOn != LocalDate.now() && gmsJob?.isActive != true) {
+            if (_state.value.gmsWeekResolvedOn != com.zzupocket.app.data.whpu.WhpuCalendar.today() && gmsJob?.isActive != true) {
                 loadGmsWeek()
             }
         } else {
@@ -537,7 +556,7 @@ cacheNoticeNeedsLogin = expired,
     private fun resyncWeekIfDayChanged() {
         val s = _state.value
         val semester = s.selectedSemester ?: return
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         if (!WeekAlignment.needsRealign(s.weekResolvedOn, today)) return
         val week = WeekAlignment.realigned(
             resolvedOn = s.weekResolvedOn,
@@ -631,8 +650,14 @@ cacheNoticeNeedsLogin = expired,
 
     /** 载入某学期的数据；没有缓存、缓存过期或强制刷新时才联网 */
     private suspend fun loadSemester(semester: Semester, loggedIn: Boolean, forceSync: Boolean) {
+        val whpu = com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(semester.id) != null
+        val source = when {
+            whpu -> "whpu"
+            semester.id == com.zzupocket.app.data.whpu.WhpuScheduleMapper.DEMO_SEMESTER_ID -> "whpu-demo"
+            else -> ScheduleRepository.SOURCE_EAS
+        }
         val fetchedAt = runCatching {
-            repo.lastFetchedAt(ScheduleRepository.SOURCE_EAS, semester.id)
+            repo.lastFetchedAt(source, semester.id)
         }.getOrNull()
         val stale = com.zzupocket.app.core.SyncPolicy.shouldRefresh(
             now = System.currentTimeMillis(),
@@ -641,7 +666,7 @@ cacheNoticeNeedsLogin = expired,
         )
         var refreshFailed = false
         try {
-            if (loggedIn && (forceSync || !repo.hasCourseData(semester.id) || stale)) {
+            if (!whpu && loggedIn && (forceSync || !repo.hasCourseData(semester.id) || stale)) {
                 repo.refreshCourseTable(semester.id)
             }
         } catch (e: Throwable) {
@@ -662,12 +687,12 @@ cacheNoticeNeedsLogin = expired,
                 _state.update { it.copy(error = e.toUserMessage()) }
             }
         }
-        var periods = repo.periods()
+        var periods = repo.periodsForSemester(semester.id)
         if (periods.isEmpty() && loggedIn) {
             runCatching { repo.refreshPeriods() }
             periods = repo.periods()
         }
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         // 周次参数：按学期存；教务给了学期起始日就直接当权威值填进去（不需要用户确认）
         val settings = resolveWeekSettings(
             semesterId = semester.id,
@@ -712,7 +737,7 @@ cacheNoticeNeedsLogin = expired,
                 weekConfirmed = settings.confirmed,
                 weekSource = settings.source,
                 dataFetchedAt = runCatching {
-                    repo.lastFetchedAt(ScheduleRepository.SOURCE_EAS, semester.id)
+                    repo.lastFetchedAt(source, semester.id)
                 }.getOrNull(),
                 // 刷新成功就清掉旧的"显示的是…"提示；失败时保留上面写进去的那行
                 cacheNotice = if (refreshFailed) it.cacheNotice else null,
@@ -741,7 +766,8 @@ cacheNoticeNeedsLogin = expired,
             weekOneStart = start,
             totalWeeks = saved.totalWeeks ?: dataWeeks.maxOrNull(),
             confirmed = true,
-            source = com.zzupocket.app.core.WeekSource.CALENDAR,
+            source = if (com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(semesterId) != null)
+                com.zzupocket.app.core.WeekSource.USER else com.zzupocket.app.core.WeekSource.CALENDAR,
         )
         runCatching { uiPrefs.saveWeekSettings(semesterId, filled) }
         return filled
@@ -846,7 +872,7 @@ cacheNoticeNeedsLogin = expired,
             } else {
                 _state.value.courses
             }
-            pool.firstOrNull { it.code == session.courseCode }?.let(::openDetail)
+            pool.firstOrNull { it.code == session.courseCode }?.let { openDetail(it, session) }
         }
     }
 
@@ -889,7 +915,7 @@ cacheNoticeNeedsLogin = expired,
         val s = _state.value
         val upper = s.weekTotal ?: s.weeks.lastOrNull() ?: s.gmsWeeks.lastOrNull() ?: week
         if (week < 1 || week > maxOf(upper, week)) return
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         applyWeekSettings(
             s.weekSettingsSnapshot().copy(
                 weekOneStart = WeekMath.weekOneStart(today, week, s.weekStartDay),
@@ -905,7 +931,7 @@ cacheNoticeNeedsLogin = expired,
     fun setWeekStartDate(date: LocalDate) {
         val s = _state.value
         val start = WeekMath.startOfWeek(date, s.weekStartDay)
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         applyWeekSettings(
             s.weekSettingsSnapshot().copy(
                 weekOneStart = start,
@@ -923,7 +949,7 @@ cacheNoticeNeedsLogin = expired,
         applyWeekSettings(
             s.weekSettingsSnapshot().copy(totalWeeks = total?.coerceIn(1, 30)),
             week = if (s.gradMode) s.gmsWeekIndex else s.weekIndex,
-            today = LocalDate.now(),
+            today = com.zzupocket.app.data.whpu.WhpuCalendar.today(),
         )
     }
 
@@ -936,7 +962,7 @@ cacheNoticeNeedsLogin = expired,
                 weekOneStart = s.weekStart?.let { WeekMath.startOfWeek(it, day) },
             ),
             week = if (s.gradMode) s.gmsWeekIndex else s.weekIndex,
-            today = LocalDate.now(),
+            today = com.zzupocket.app.data.whpu.WhpuCalendar.today(),
         )
     }
 
@@ -1020,7 +1046,7 @@ cacheNoticeNeedsLogin = expired,
         val id = weekSemesterId() ?: return
         val st = runCatching { uiPrefs.weekSettings(id) }.getOrNull() ?: return
         val start = st.weekOneStart ?: return
-        val today = LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         val week = WeekMath.weekIndexAt(start, today).coerceIn(1, st.totalWeeks ?: Int.MAX_VALUE)
         val grad = _state.value.gradMode
         _state.update {
@@ -1071,7 +1097,7 @@ cacheNoticeNeedsLogin = expired,
         }
     }
 
-    fun openDetail(course: Course) {
+    fun openDetail(course: Course, session: Session? = null) {
         viewModelScope.launch {
             val ovs = runCatching {
                 repo.displayOverrides(course.semesterId).filter { it.courseCode == course.code }
@@ -1079,6 +1105,7 @@ cacheNoticeNeedsLogin = expired,
             _state.update {
                 it.copy(
                     detailCourse = course,
+                    detailSession = session,
                     detailOverrides = DisplayOverridesView(
                         name = ovs.firstOrNull { it.kind == ScheduleRepository.KIND_NAME }?.value,
                         rooms = ovs
@@ -1093,7 +1120,7 @@ cacheNoticeNeedsLogin = expired,
         }
     }
 
-    fun closeDetail() = _state.update { it.copy(detailCourse = null, detailOverrides = null) }
+    fun closeDetail() = _state.update { it.copy(detailCourse = null, detailSession = null, detailOverrides = null) }
 
     /**
      * 保存显示覆盖（issue #6 保底）：名称整门课；教室按时段，键 "weekday|startUnit"

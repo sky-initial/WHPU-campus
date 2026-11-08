@@ -13,6 +13,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WhpuAcademicProviderTest {
+    @Test fun requestUsesWebViewsUserAgentWithoutAddingCredentialsToUrl() {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            assertEquals("test-webview", chain.request().header("User-Agent"))
+            assertEquals(setOf("gnmkdm"), chain.request().url.queryParameterNames)
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200)
+                .message("test").body("""{"kbList":[]}""".toResponseBody()).build()
+        }.build()
+        WhpuAcademicProvider(WhpuSessionManager(), client = client, userAgent = { "test-webview" })
+            .schedule(WhpuTerm.YEAR_2026_FIRST)
+    }
     private fun provider(code: Int, body: String, check: (okhttp3.Request) -> Unit = {}): WhpuAcademicProvider {
         val client = OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
             check(chain.request())

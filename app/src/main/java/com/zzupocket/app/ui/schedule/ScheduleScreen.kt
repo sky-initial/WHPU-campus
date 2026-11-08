@@ -103,6 +103,9 @@ import com.zzupocket.app.domain.Phase
 import com.zzupocket.app.domain.Semester
 import com.zzupocket.app.domain.Session
 import com.zzupocket.app.domain.toSlotLines
+import com.zzupocket.app.domain.currentTeachers
+import com.zzupocket.app.domain.teachingSessions
+import com.zzupocket.app.ui.components.WeekStartWheelDialog
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -123,6 +126,16 @@ fun ScheduleScreen(
     var showWeekPicker by remember { mutableStateOf(false) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.onResume() }
+
+    if (!state.loading && state.selectedSemester?.id?.let {
+            com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(it) != null
+        } == true && state.weekStart == null) {
+        WeekStartWheelDialog(
+            initialDate = com.zzupocket.app.data.whpu.WhpuCalendar.today(),
+            requiredDay = java.time.DayOfWeek.of(state.weekStartDay.isoDay),
+            onConfirm = vm::setWeekStartDate,
+        )
+    }
 
     Scaffold(
         // 壁纸画在外壳层，这里必须透明，否则页面自己的底色会把壁纸盖掉
@@ -147,7 +160,11 @@ fun ScheduleScreen(
                             Icon(Icons.Filled.Add, contentDescription = "添加日程")
                         }
                     }
-                    IconButton(onClick = { if (state.gradMode) vm.loadGmsWeek(force = true) else vm.refresh() }) {
+                    IconButton(onClick = {
+                        if (state.gradMode) vm.loadGmsWeek(force = true)
+                        else if (state.selectedSemester?.id?.let { com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(it) } != null) onOpenLogin()
+                        else vm.refresh()
+                    }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "刷新课表")
                     }
                     // 顶栏只留一个设置入口：教学周、显示、背景、入学年、课程总览都在里面
@@ -165,11 +182,17 @@ fun ScheduleScreen(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
+                TextButton(onClick = onOpenLogin) { Text("登录学校并导入真实课表") }
             }
             state.practiceCourses.forEach { practice ->
                 val weeks = practice.weeks.sorted().joinToString("、")
                 Text(
-                    text = "实践安排：${practice.name ?: "未命名"}" + if (weeks.isEmpty()) "" else " · 第${weeks}周",
+                    text = listOfNotNull(
+                        "实践安排：${practice.name ?: "未命名"}",
+                        weeks.takeIf { it.isNotEmpty() }?.let { "第${it}周" },
+                        practice.teacher?.takeIf { it.isNotBlank() },
+                        practice.campus?.takeIf { it.isNotBlank() },
+                    ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                 )
@@ -347,6 +370,8 @@ fun ScheduleScreen(
     state.detailCourse?.let { course ->
         CourseDetailSheet(
             course = course,
+            weekIndex = if (state.gradMode) state.gmsWeekIndex else state.weekIndex,
+            selectedSession = state.detailSession,
             onDismiss = vm::closeDetail,
             overrides = state.detailOverrides,
             onApplyEdits = vm::applyDisplayEdits,
@@ -536,10 +561,14 @@ private fun ScheduleGrid(
     val days = 1..prefs.dayCount
     val cellH = prefs.cellHeightDp.dp
     val gap = if (prefs.blockBorder == BlockBorder.NONE) 0.75.dp else 1.dp
-    val dark = isSystemInDarkTheme()
-    val todayIso = LocalDate.now().toString()
-    val today = LocalDate.now()
-    val now = LocalTime.now()
+    val dark = when (prefs.darkMode) {
+        com.zzupocket.app.data.prefs.DarkMode.SYSTEM -> isSystemInDarkTheme()
+        com.zzupocket.app.data.prefs.DarkMode.LIGHT -> false
+        com.zzupocket.app.data.prefs.DarkMode.DARK -> true
+    }
+    val todayIso = com.zzupocket.app.data.whpu.WhpuCalendar.today().toString()
+    val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
+    val now = com.zzupocket.app.data.whpu.WhpuCalendar.now()
     // 有壁纸时，星期表头和节次时间这些直接压在照片上的小字加一层轻投影
     val labelShadow = wallpaperShadow(
         prefs.backgroundPath != null,
@@ -1132,6 +1161,8 @@ private fun weekdayZh(d: Int): String = when (d) {
 @Composable
 internal fun CourseDetailSheet(
     course: Course,
+    weekIndex: Int,
+    selectedSession: Session? = null,
     onDismiss: () -> Unit,
     /** 该课的显示覆盖（issue #6 保底）；有则显示「已自定义」与编辑/恢复入口 */
     overrides: DisplayOverridesView? = null,
@@ -1190,9 +1221,11 @@ internal fun CourseDetailSheet(
                     }
                 }
             }
-            if (course.teachers.isNotEmpty()) {
-                DetailRow("教师", course.teachers.joinToString("、"))
-            }
+            val teachers = course.currentTeachers(weekIndex, selectedSession)
+            DetailRow(if (selectedSession != null) "本次授课教师" else "本周授课教师",
+                teachers.joinToString("、").ifEmpty {
+                    if (course.teachingSessions(weekIndex, selectedSession).isEmpty()) "本周无课" else "未提供"
+                })
             val rooms = course.roomTexts.mapNotNull { ScheduleText.tidyPlace(it) }.distinct()
             if (rooms.isNotEmpty()) DetailRow("地点", rooms.joinToString("、"))
             val clock = course.sessions.firstOrNull()?.let { s ->
@@ -1211,10 +1244,10 @@ internal fun CourseDetailSheet(
 
             // 按「时段 → (地点, 教师)」归并：整学期都一样就只列一行，真的不同才拆开。
             // 只有一行时没必要显示（上面的汇总已经说清楚了）。
-            val slotLines = course.sessions.toSlotLines()
+            val slotLines = course.teachingSessions(weekIndex, selectedSession).toSlotLines()
             if (slotLines.size > 1) {
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                Text("分时段明细", style = MaterialTheme.typography.titleSmall)
+                Text("本周分时段明细", style = MaterialTheme.typography.titleSmall)
                 slotLines.forEach { line ->
                     val unitText =
                         if (line.startUnit == line.endUnit) "${line.startUnit}节"

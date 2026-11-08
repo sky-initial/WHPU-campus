@@ -32,7 +32,7 @@ object TodayTimetable {
 
         runCatching {
             val semester = repo.currentSemester() ?: return@runCatching
-            val week = repo.resolveCurrentWeek(semester, date)
+            val week = weekAt(repo, prefs, semester, date)
             out += repo.sessionsOn(semester.id, date, week)
         }
 
@@ -67,7 +67,7 @@ object TodayTimetable {
     ): Int? {
         val semester = runCatching { repo.currentSemester() }.getOrNull()
         if (semester != null) {
-            val week = runCatching { repo.resolveCurrentWeek(semester, date) }.getOrNull()
+            val week = runCatching { weekAt(repo, prefs, semester, date) }.getOrNull()
             if (week != null) return week
         }
         return gradWeekAt(prefs, date)
@@ -79,9 +79,19 @@ object TodayTimetable {
      * 组件用它区分「还没同步过」和「今天没课」——这两种情况显示不同文案，不能混。
      */
     suspend fun hasAnySchedule(repo: ScheduleRepository, prefs: UiPrefsStore): Boolean {
-        val undergrad = runCatching { repo.currentSemester()?.let { repo.hasCourseData(it.id) } }
+        val undergrad = runCatching { repo.currentSemester()?.let {
+            repo.hasCourseData(it.id) || repo.lastFetchedAt("whpu", it.id) != null
+        } }
             .getOrNull() == true
         if (undergrad) return true
         return gradWeekAt(prefs, LocalDate.now()) != null
+    }
+
+    private suspend fun weekAt(repo: ScheduleRepository, prefs: UiPrefsStore,
+        semester: com.zzupocket.app.domain.Semester, date: LocalDate): Int? {
+        val settings = prefs.weekSettings(semester.id)
+        val start = settings.weekOneStart ?: return repo.resolveCurrentWeek(semester, date)
+        val week = WeekMath.weekIndexAt(start, date)
+        return week.takeIf { it in 1..(settings.totalWeeks ?: semester.weekIndices.maxOrNull() ?: 1) }
     }
 }

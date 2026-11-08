@@ -4,14 +4,22 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.FormBody
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 data class WhpuTerm(val year: Int, val code: String) {
+    val semesterId: Int get() = 1_000_000 + year * 10 + if (code == "3") 1 else 2
     companion object {
         val YEAR_2026_FIRST = WhpuTerm(2026, "3")
+        fun fromSemesterId(id: Int): WhpuTerm? {
+            val value = id - 1_000_000
+            val year = value / 10
+            return if (year in 2000..2199 && value % 10 in 1..2)
+                WhpuTerm(year, if (value % 10 == 1) "3" else "12") else null
+        }
     }
 }
 
@@ -21,6 +29,22 @@ interface WhpuScheduleProvider {
 
 class WhpuSessionManager : CookieJar {
     private val cookies = mutableListOf<Cookie>()
+    @Volatile var userAgent: String? = null
+        private set
+
+    /** CookieManager already scoped this header to the exact academic endpoint. */
+    @Synchronized fun acceptBrowserSession(header: String?, browserUserAgent: String) {
+        clear()
+        val url = WhpuWebPolicy.SCHEDULE.toHttpUrl()
+        header.orEmpty().split(';').forEach { part ->
+            val pair = part.trim().split('=', limit = 2)
+            if (pair.size == 2 && pair[0].isNotBlank()) {
+                cookies.add(Cookie.Builder().name(pair[0]).value(pair[1])
+                    .hostOnlyDomain(url.host).path("/kbcx").secure().build())
+            }
+        }
+        userAgent = browserUserAgent
+    }
 
     @Synchronized override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         cookies.forEach { cookie ->
@@ -34,7 +58,7 @@ class WhpuSessionManager : CookieJar {
         return cookies.filter { it.matches(url) }
     }
 
-    @Synchronized fun clear() = cookies.clear()
+    @Synchronized fun clear() { cookies.clear(); userAgent = null }
 }
 
 sealed class WhpuAcademicException(message: String, cause: Throwable? = null) : Exception(message, cause) {
@@ -49,6 +73,7 @@ class WhpuAcademicProvider(
     session: CookieJar,
     private val endpoint: String = "https://jwglxt.whpu.edu.cn/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151",
     client: OkHttpClient = OkHttpClient(),
+    private val userAgent: () -> String? = { null },
 ) : WhpuScheduleProvider {
     private val client = client.newBuilder().cookieJar(session).followRedirects(false)
         .connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS)
@@ -62,7 +87,8 @@ class WhpuAcademicProvider(
             .header("Accept", "*/*")
             .header("Origin", "https://jwglxt.whpu.edu.cn")
             .header("Referer", "https://jwglxt.whpu.edu.cn/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default")
-            .header("X-Requested-With", "XMLHttpRequest").build()
+            .header("X-Requested-With", "XMLHttpRequest")
+            .apply { userAgent()?.let { header("User-Agent", it) } }.build()
         val response = try { client.newCall(request).execute() } catch (e: IOException) {
             throw WhpuAcademicException.Network(e)
         }
