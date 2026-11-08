@@ -3,8 +3,8 @@ import java.util.Properties
 
 // ── 签名 ───────────────────────────────────────────────────────────────
 // 凭据在仓库根的 keystore.properties（已 gitignore），keystore 文件本身在仓库之外。
-// 刻意让 debug 与 release 用**同一套签名**：不同签名不能互相覆盖安装，
-// 切换时必须卸载 → 本地数据全丢。
+// Debug 保留默认开发签名；Release 使用独立发布签名。
+// 两者 applicationId 相同但证书不同，不能直接覆盖安装。
 val keystorePropsFile = rootProject.file("keystore.properties")
 val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
@@ -29,17 +29,17 @@ android {
         minSdk = 31
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 99
+        versionCode = 101
         // 版本号不带 -P6 那种阶段后缀（阶段划分是 docs 的事）；预发行用标准 rc 标记（如 0.33.0-rc1），
         // AppUpdate.compareVersions 对它有专门规则：rc < 同号正式版，正式版发布后已装 rc 的用户能看到红点。
         // ⚠️ 升级判断只认 versionCode（Android 的规则），versionName 是给人看的；
         // 所以改名号（哪怕是"变小"的数字）都不会影响覆盖安装，每次发版 versionCode 必须 +1。
-        versionName = "0.33.2"
+        versionName = "0.34.0-rc2"
     }
 
     signingConfigs {
         if (hasReleaseSigning) {
-            create("zzupocket") {
+            create("whpuRelease") {
                 storeFile = releaseStoreFile
                 storePassword = keystoreProps.getProperty("storePassword")
                 keyAlias = keystoreProps.getProperty("keyAlias")
@@ -49,9 +49,6 @@ android {
     }
 
     buildTypes {
-        debug {
-            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("zzupocket")
-        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -60,10 +57,7 @@ android {
                 "proguard-rules.pro",
             )
             if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("zzupocket")
-            } else {
-                logger.lifecycle("⚠️ 未找到 keystore.properties，release 包将使用 debug 签名")
-                signingConfig = signingConfigs.getByName("debug")
+                signingConfig = signingConfigs.getByName("whpuRelease")
             }
         }
     }
@@ -136,4 +130,11 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+}
+
+// 发布产物必须使用配置的签名，避免把未签名包作为可安装版本发布。
+tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        check(hasReleaseSigning) { "发布构建需要本地 keystore.properties 和有效的发布签名文件。" }
+    }
 }

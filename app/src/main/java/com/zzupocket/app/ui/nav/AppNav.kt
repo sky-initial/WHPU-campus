@@ -242,10 +242,14 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         TextButton(onClick = { navController.navigate(ROUTE_LOGIN) }) { Text("学校登录与课表同步") }
                         TextButton(onClick = { navController.navigate(ROUTE_GRADES) }) { Text("成绩查询") }
                         TextButton(onClick = { navController.navigate(ROUTE_EXAMS) }) { Text("考试安排") }
+                        TextButton(onClick = { navController.navigate(AppRoutes.CLASS_DND) }) { Text("上课免打扰") }
                         Text("校园卡、电费和图书馆正在适配。")
                         TextButton(onClick = { navController.navigate(ROUTE_APPEARANCE) }) { Text("外观设置") }
                         TextButton(onClick = { navController.navigate(ROUTE_ABOUT) }) { Text("关于") }
                     }
+                }
+                composable(AppRoutes.CLASS_DND) {
+                    com.zzupocket.app.ui.dnd.ClassDndScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_APPEARANCE) {
                     AppearanceScreen(onBack = { navController.popBackStack() })

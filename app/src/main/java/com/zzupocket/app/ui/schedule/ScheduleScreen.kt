@@ -7,6 +7,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -105,6 +107,7 @@ import com.zzupocket.app.domain.Session
 import com.zzupocket.app.domain.toSlotLines
 import com.zzupocket.app.domain.currentTeachers
 import com.zzupocket.app.domain.teachingSessions
+import com.zzupocket.app.ui.components.CollapsibleSection
 import com.zzupocket.app.ui.components.WeekStartWheelDialog
 import java.time.LocalDate
 import java.time.LocalTime
@@ -184,6 +187,10 @@ fun ScheduleScreen(
                 )
                 TextButton(onClick = onOpenLogin) { Text("登录学校并导入真实课表") }
             }
+            if (state.practiceCourses.isNotEmpty()) {
+                var practiceExpanded by rememberSaveable(state.selectedSemester?.id) { mutableStateOf(false) }
+                CollapsibleSection("实践安排 · ${state.practiceCourses.size} 项", practiceExpanded, { practiceExpanded = it }) {
+                    Column(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
             state.practiceCourses.forEach { practice ->
                 val weeks = practice.weeks.sorted().joinToString("、")
                 Text(
@@ -196,6 +203,9 @@ fun ScheduleScreen(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                 )
+            }
+                    }
+                }
             }
             // 研究生账号在本科教务里本来就没有角色：那条 401/403 说明对他是噪音，
             // 而且与下面的「研究生课表」区块自相矛盾（一边说没权限、一边请他登录研究生系统）。

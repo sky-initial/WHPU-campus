@@ -85,6 +85,8 @@ object AppGraph {
 
     val tokenStore: TokenStore by lazy { TokenStore(appContext) }
 
+    val classDndController by lazy { com.zzupocket.app.dnd.ClassDndController(appContext) }
+
     val uiPrefsStore: UiPrefsStore by lazy { UiPrefsStore(appContext) }
 
     /** 登录流程的跨页面状态（目前只有"上一次发验证码的时刻"，用于冷却倒计时接着算） */

@@ -9,6 +9,11 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
+import com.zzupocket.app.ui.components.CollapsibleSection
+import com.zzupocket.app.ui.components.WhpuTermSelector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,7 +34,7 @@ import java.time.LocalDate
 
 /** School-owned sign-in UI. No password field, JavaScript bridge or credential logging in the app. */
 @SuppressLint("SetJavaScriptEnabled")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Boolean = false, queryName: String = "成绩查询") {
     val context = LocalContext.current
@@ -45,12 +50,13 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
     var pendingSemesterId by rememberSaveable { mutableStateOf<Int?>(null) }
     var pickerInitial by rememberSaveable { mutableStateOf(WhpuCalendar.today().toString()) }
     var dateError by remember { mutableStateOf<String?>(null) }
-    var year by rememberSaveable { mutableStateOf("2026") }
+    var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+    val controlsMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.42f
+    var year by rememberSaveable { mutableIntStateOf(WhpuCalendar.today().let { if (it.monthValue >= 9) it.year else it.year - 1 }) }
     var termCode by rememberSaveable { mutableStateOf("3") }
-    val term = year.toIntOrNull()?.takeIf { it in 2000..2199 }?.let { WhpuTerm(it, termCode) }
+    val term = WhpuTerm(year, termCode)
     fun startSync(replaceAccount: Boolean = false, legacyAccount: WhpuAccountId? = null) {
         val selectedTerm = term
-        if (selectedTerm == null) { message = "请填写有效的学年。"; return }
         val view = webView ?: return
         if (!WhpuWebPolicy.isAcademic(view.url.orEmpty())) { message = "请先返回教务系统页面。"; return }
         AppGraph.whpuSessionManager.acceptBrowserSession(
@@ -132,47 +138,47 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
         }) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (!signInOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(year, { year = it }, label = { Text("学年起始年") },
-                        modifier = Modifier.weight(1f), singleLine = true, enabled = !busy)
-                    FilterChip(selected = termCode == "3", onClick = { termCode = "3" }, label = { Text("第一学期") }, enabled = !busy)
-                    FilterChip(selected = termCode == "12", onClick = { termCode = "12" }, label = { Text("第二学期") }, enabled = !busy)
-                }
-                Text(message, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(enabled = !busy && academicPage, onClick = {
-                        if (signInOnly) onImported() else startSync()
-                    }) {
-                        Text(if (signInOnly) "返回${queryName}" else if (busy) "同步中…" else "同步到课表")
-                    }
-                    if (syncJob?.isActive == true) TextButton(onClick = {
-                        syncJob?.cancel()
-                        message = "已取消同步，原缓存保留。"
-                    }) { Text("取消同步") }
-                    if (imported) TextButton(onClick = onImported) { Text("查看课表") }
-                    TextButton(enabled = !busy, onClick = {
-                        busy = true
-                        webView?.stopLoading()
-                        AppGraph.whpuSessionManager.clear()
-                        imported = false
-                        WebStorage.getInstance().deleteAllData()
-                        CookieManager.getInstance().removeAllCookies {
-                            webView?.post {
-                                CookieManager.getInstance().flush()
-                                webView?.clearHistory(); webView?.loadUrl(WhpuWebPolicy.LOGIN)
-                                busy = false
-                            }
+            CollapsibleSection(
+                title = if (busy) "正在同步…" else if (signInOnly) "登录操作" else "$year—${year + 1} · ${if (termCode == "3") "第一学期" else "第二学期"} · 同步操作",
+                expanded = controlsExpanded, onExpandedChange = { controlsExpanded = it },
+            ) {
+                Column(Modifier.heightIn(max = controlsMaxHeight).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (!signInOnly) WhpuTermSelector(term, enabled = !busy, onSelect = { year = it.year; termCode = it.code })
+                    Text(message, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(enabled = !busy && academicPage, onClick = {
+                            if (signInOnly) onImported() else startSync()
+                        }) {
+                            Text(if (signInOnly) "返回${queryName}" else if (busy) "同步中…" else "同步到课表")
                         }
-                        message = "已清除本机网页登录状态，离线课表保留。"
-                    }) { Text("清除登录态 / 换账号") }
+                        if (syncJob?.isActive == true) TextButton(onClick = {
+                            syncJob?.cancel()
+                            message = "已取消同步，原缓存保留。"
+                        }) { Text("取消同步") }
+                        if (imported) TextButton(onClick = onImported) { Text("查看课表") }
+                        TextButton(enabled = !busy, onClick = {
+                            busy = true
+                            webView?.stopLoading()
+                            AppGraph.whpuSessionManager.clear()
+                            imported = false
+                            WebStorage.getInstance().deleteAllData()
+                            CookieManager.getInstance().removeAllCookies {
+                                webView?.post {
+                                    CookieManager.getInstance().flush()
+                                    webView?.clearHistory(); webView?.loadUrl(WhpuWebPolicy.LOGIN)
+                                    busy = false
+                                }
+                            }
+                            message = "已清除本机网页登录状态，离线课表保留。"
+                        }) { Text("清除登录态 / 换账号") }
+                    }
+                    Text("学校页面：$host", style = MaterialTheme.typography.labelSmall)
+                    TextButton(enabled = !busy, onClick = {
+                        message = "正在返回教务系统，已保留学校登录状态。"
+                        webView?.loadUrl(WhpuWebPolicy.LOGIN)
+                    }) { Text("返回教务") }
                 }
-                Text("学校页面：$host", style = MaterialTheme.typography.labelSmall)
-                TextButton(enabled = !busy, onClick = {
-                    message = "正在返回教务系统，已保留学校登录状态。"
-                    webView?.loadUrl(WhpuWebPolicy.LOGIN)
-                }) { Text("返回教务") }
             }
             AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = { ctx ->
                 WebView(ctx).apply {
