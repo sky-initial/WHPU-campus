@@ -32,13 +32,13 @@ fun WeekStartWheelDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("课表已保存在本机。滑动选择开学日期，用于计算教学周、今日安排和桌面小组件。")
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    DateWheel("年", selected.year, 2000, 2199, Modifier.weight(1f), !saving) {
+                    NumberWheel("年", selected.year, 2000, 2199, Modifier.weight(1f), !saving) {
                         epochDay = selected.withYear(it).toEpochDay()
                     }
-                    DateWheel("月", selected.monthValue, 1, 12, Modifier.weight(1f), !saving) {
+                    NumberWheel("月", selected.monthValue, 1, 12, Modifier.weight(1f), !saving) {
                         epochDay = selected.withMonth(it).toEpochDay()
                     }
-                    DateWheel("日", selected.dayOfMonth, 1, selected.lengthOfMonth(), Modifier.weight(1f), !saving) {
+                    NumberWheel("日", selected.dayOfMonth, 1, selected.lengthOfMonth(), Modifier.weight(1f), !saving) {
                         epochDay = selected.withDayOfMonth(it).toEpochDay()
                     }
                 }
@@ -60,7 +60,7 @@ fun WeekStartWheelDialog(
 }
 
 @Composable
-private fun DateWheel(label: String, value: Int, min: Int, max: Int, modifier: Modifier,
+internal fun NumberWheel(label: String, value: Int, min: Int, max: Int, modifier: Modifier,
     enabled: Boolean, onChange: (Int) -> Unit) {
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {

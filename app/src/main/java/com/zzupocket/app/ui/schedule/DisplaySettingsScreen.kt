@@ -171,7 +171,7 @@ class DisplaySettingsViewModel : ViewModel() {
             )
             runCatching { store.saveWeekSettings(id, st) }
         }
-        val today = java.time.LocalDate.now()
+        val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
         _week.value = WeekUi(
             semesterId = id,
             grad = id == com.zzupocket.app.data.gms.GmsScheduleMapper.GRAD_SEMESTER_ID,
@@ -204,7 +204,7 @@ class DisplaySettingsViewModel : ViewModel() {
     fun setCurrentWeek(week: Int) = viewModelScope.launch {
         val w = _week.value
         val id = w.semesterId ?: return@launch
-        val start = com.zzupocket.app.core.WeekMath.weekOneStart(java.time.LocalDate.now(), week, w.startDay)
+        val start = com.zzupocket.app.core.WeekMath.weekOneStart(com.zzupocket.app.data.whpu.WhpuCalendar.today(), week, w.startDay)
         store.saveWeekSettings(
             id,
             com.zzupocket.app.core.WeekSettings(
@@ -273,6 +273,7 @@ fun DisplaySettingsScreen(
     onRecrop: () -> Unit = {},
     /** 「课程总览」入口（原顶栏图标移到设置页里） */
     onOpenOverview: (Int) -> Unit = {},
+    onOpenPeriods: (Int) -> Unit = {},
     vm: DisplaySettingsViewModel = viewModel(),
 ) {
     val prefs by vm.prefs.collectAsStateWithLifecycle()
@@ -319,6 +320,12 @@ fun DisplaySettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("课程总览（本学期全部课程）") }
+
+            week.semesterId?.takeIf { com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(it) != null }?.let { id ->
+                OutlinedButton(onClick = { onOpenPeriods(id) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("上课作息（本学期）")
+                }
+            }
 
             // 教学周放在最上面：周次对不对，比"好不好看"重要得多
             WeekSettingsCard(
