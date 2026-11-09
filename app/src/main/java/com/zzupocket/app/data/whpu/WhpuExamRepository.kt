@@ -1,5 +1,7 @@
 package com.zzupocket.app.data.whpu
 
+import androidx.room.invalidationTrackerFlow
+import androidx.room.withTransaction
 import com.zzupocket.app.data.db.AppDatabase
 import com.zzupocket.app.data.db.KvCacheEntity
 import com.zzupocket.app.data.repo.ScheduleRepository
@@ -19,6 +21,13 @@ class WhpuExamRepository(
     private val source: WhpuExamSource,
     private val session: WhpuSessionManager,
 ) {
+    fun observeCurrent() = db.invalidationTrackerFlow("semesters", "kv_cache").map { cachedCurrent() }
+
+    suspend fun cachedCurrent(): CurrentWhpuExams = db.withTransaction {
+        val term = scheduleRepository.currentSemester()?.id?.let(WhpuTerm::fromSemesterId)
+        CurrentWhpuExams(term, term?.let { cached(it) })
+    }
+
     fun observe(term: WhpuTerm) = db.kvCacheDao().observe(key(term)).map { entry ->
         entry?.let { WhpuExamsSnapshot(term, Json.decodeFromString<List<WhpuExam>>(it.payload), it.fetchedAt) }
     }

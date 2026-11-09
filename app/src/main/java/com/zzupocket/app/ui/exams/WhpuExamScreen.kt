@@ -32,6 +32,16 @@ fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit) {
     val today = remember { WhpuCalendar.today() }
     var year by rememberSaveable { mutableIntStateOf(if (today.monthValue >= 9) today.year else today.year - 1) }
     var code by rememberSaveable { mutableStateOf(if (today.monthValue in 2..8) "12" else "3") }
+    var initialTermLoaded by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!initialTermLoaded) {
+            AppGraph.scheduleRepository.currentSemester()?.id?.let(WhpuTerm::fromSemesterId)?.let {
+                year = it.year
+                code = it.code
+            }
+            initialTermLoaded = true
+        }
+    }
     val term = WhpuTerm(year, code)
     val repository = AppGraph.whpuExamRepository
     val cacheFlow = remember(term) { repository.observe(term) }
@@ -91,13 +101,13 @@ fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                WhpuTermSelector(term, enabled = !busy, onSelect = {
+                WhpuTermSelector(term, enabled = !busy && initialTermLoaded, onSelect = {
                     year = it.year
                     code = it.code
                 })
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { refresh() }, enabled = !busy) { Text(if (busy) "刷新中…" else "刷新考试安排") }
-                    TextButton(onClick = onLogin, enabled = !busy) { Text("学校登录 / 换账号") }
+                    Button(onClick = { refresh() }, enabled = !busy && initialTermLoaded) { Text(if (busy) "刷新中…" else "刷新考试安排") }
+                    TextButton(onClick = onLogin, enabled = !busy && initialTermLoaded) { Text("学校登录 / 换账号") }
                     if (job?.isActive == true) TextButton(onClick = {
                         job?.cancel(); message = "已取消刷新，原缓存保留。"
                     }) { Text("取消刷新") }

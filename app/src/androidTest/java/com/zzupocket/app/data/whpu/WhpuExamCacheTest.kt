@@ -9,6 +9,7 @@ import com.zzupocket.app.data.db.AppDatabase
 import com.zzupocket.app.data.repo.ScheduleRepository
 import com.zzupocket.app.domain.PlanSpec
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -48,6 +49,46 @@ class WhpuExamCacheTest {
     private fun grades() = WhpuGradeRepository(db, schedule, WhpuGradeSource {
         WhpuGrades(it, WhpuAccountId("synthetic-a"), listOf(WhpuGrade("人工课程", null, "2030-01-11(14:00-16:00)", "2", null, null, null, null, null)))
     }, session)
+    @Test fun dailyExamsFollowCurrentSemesterAndSurviveReopen() = runBlocking {
+        val exams = repo(source(value = "2030-01-10(09:00-11:00)"))
+        schedule.importWhpuAccountTimetable(first, timetable("synthetic-a"))
+        exams.refresh(first)
+        repo(source(value = "2030-01-11(14:00-16:00)")).refresh(second)
+        assertEquals(first, exams.cachedCurrent().term)
+        assertEquals(1, exams.cachedCurrent().on(java.time.LocalDate.of(2030, 1, 10)).size)
+        val switched = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) { exams.observeCurrent().first { it.term == second } }
+        }
+        schedule.importWhpuAccountTimetable(second, timetable("synthetic-a"))
+        val expected = exams.cachedCurrent()
+        assertEquals(expected, switched.await())
+        assertEquals(second, expected.term)
+        assertTrue(expected.on(java.time.LocalDate.of(2030, 1, 10)).isEmpty())
+        db.close(); open()
+        assertEquals(expected, repo().cachedCurrent())
+    }
+    @Test fun dailyExamsDoNotMixDemoWithStoredSchoolExams() = runBlocking {
+        schedule.ensureDemoTimetable()
+        repo().refresh(first)
+        assertEquals(CurrentWhpuExams(null, null), repo().cachedCurrent())
+    }
+    @Test fun dailyExamsDistinguishMissingCacheAndSyncedEmpty() = runBlocking {
+        schedule.importWhpuAccountTimetable(first, timetable("synthetic-a"))
+        assertNull(repo().cachedCurrent().snapshot)
+        repo(WhpuExamSource { WhpuExams(it, WhpuAccountId("synthetic-a"), emptyList()) }).refresh(first)
+        assertNotNull(repo().cachedCurrent().snapshot)
+        assertTrue(repo().cachedCurrent().snapshot!!.exams.isEmpty())
+    }
+    @Test fun dailyObserverRemovesPreviousAccountExams() = runBlocking {
+        schedule.importWhpuAccountTimetable(first, timetable("synthetic-a"))
+        repo().refresh(first)
+        val cleared = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) { repo().observeCurrent().first { it.term == first && it.snapshot == null } }
+        }
+        repo(source("synthetic-b")).refresh(second, true)
+        assertNull(cleared.await().snapshot)
+        assertNotNull(repo().cached(second))
+    }
     @Test fun examAndGradeSwitchesClearEachOthersCache() = runBlocking {
         grades().refresh(first)
         repo().refresh(first)

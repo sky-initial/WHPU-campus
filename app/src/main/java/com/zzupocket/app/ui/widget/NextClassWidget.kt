@@ -96,7 +96,6 @@ class NextClassWidget : AppWidgetProvider() {
         ) {
             val colors = WidgetStyle.colors(context, prefs)
             val dark = WidgetStyle.isDark(context, prefs)
-            val click = Widgets.openApp(context, AppRoutes.SCHEDULE)
             ids.forEach { id ->
                 val (_, heightDp) = Widgets.sizeDp(mgr, id)
                 val plan = schedule.nextClassPlan(WidgetSchedule.nextClassPreviews(heightDp))
@@ -105,7 +104,7 @@ class NextClassWidget : AppWidgetProvider() {
                     plan = plan,
                     colors = colors,
                     dark = dark,
-                    click = click,
+                    click = Widgets.openApp(context, if (plan.isExam) AppRoutes.EXAMS else AppRoutes.SCHEDULE),
                     detail = WidgetSchedule.nextClassDetail(heightDp),
                     heightDp = heightDp,
                 )
