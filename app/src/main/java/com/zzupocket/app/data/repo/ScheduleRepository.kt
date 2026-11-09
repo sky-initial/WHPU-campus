@@ -30,6 +30,10 @@ import kotlinx.coroutines.sync.withLock
 import com.zzupocket.app.data.whpu.MockWhpuScheduleProvider
 import com.zzupocket.app.data.whpu.WhpuScheduleMapper
 import com.zzupocket.app.data.whpu.WhpuTerm
+import com.zzupocket.app.data.whpu.WhpuPeriodSettings
+import com.zzupocket.app.data.whpu.WhpuPeriodTime
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * 课表仓库。
@@ -235,8 +239,20 @@ class ScheduleRepository(
 
     suspend fun periods(): List<Period> = db.periodDao().all().map { it.toDomain() }
 
-    suspend fun periodsForSemester(id: Int): List<Period> =
-        if (WhpuTerm.fromSemesterId(id) != null) com.zzupocket.app.data.whpu.WhpuCalendar.periods() else periods()
+    suspend fun periodsForSemester(id: Int): List<Period> {
+        if (WhpuTerm.fromSemesterId(id) == null) return periods()
+        val cached = db.kvCacheDao().get("whpu-periods:$id")
+        val times = cached?.let { Json.decodeFromString<List<WhpuPeriodTime>>(it.payload) }
+            ?: WhpuPeriodSettings.defaults()
+        return WhpuPeriodSettings.periods(times)
+    }
+
+    suspend fun saveWhpuPeriods(id: Int, times: List<WhpuPeriodTime>) {
+        require(WhpuTerm.fromSemesterId(id) != null) { "请先导入学校课表。" }
+        require(WhpuPeriodSettings.error(times) == null) { WhpuPeriodSettings.error(times).orEmpty() }
+        if (times == WhpuPeriodSettings.defaults()) db.kvCacheDao().remove("whpu-periods:$id")
+        else db.kvCacheDao().put(KvCacheEntity("whpu-periods:$id", Json.encodeToString(times), System.currentTimeMillis(), 0))
+    }
 
     /** Bind imported school data to the server's account identifier in the same transaction. */
     suspend fun importWhpuAccountTimetable(
@@ -779,9 +795,11 @@ class ScheduleRepository(
         runCatching { db.displayOverrideDao().bySemester(semesterId) }.getOrNull()
 
     private suspend fun List<Session>.withOverrides(semesterId: Int): List<Session> {
-        val ovs = overridesOrNull(semesterId) ?: return this
-        if (ovs.isEmpty()) return this
-        return applyDisplayOverrides(this, ovs)
+        val timed = if (WhpuTerm.fromSemesterId(semesterId) != null)
+            WhpuPeriodSettings.apply(this, periodsForSemester(semesterId)) else this
+        val ovs = overridesOrNull(semesterId) ?: return timed
+        if (ovs.isEmpty()) return timed
+        return applyDisplayOverrides(timed, ovs)
     }
 
     /** 课程名覆盖作用于 [Course.nameZh]（详情页/总览的标题） */

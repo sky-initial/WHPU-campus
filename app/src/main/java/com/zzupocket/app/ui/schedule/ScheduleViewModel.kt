@@ -526,7 +526,15 @@ cacheNoticeNeedsLogin = expired,
                         val (visible, _) = applyYearFilter(all)
                         _state.update { it.copy(allSemesters = all, semesters = visible) }
                         loadSemester(fresh, loggedIn = false, forceSync = false)
-                    } else resyncWeekIfDayChanged()
+                    } else {
+                        val periods = repo.periodsForSemester(selected.id)
+                        if (periods != _state.value.periods) {
+                            val sessions = repo.sessionsOfSemester(selected.id)
+                            val courses = repo.courses(selected.id)
+                            _state.update { it.copy(periods = periods, allSessions = sessions, courses = courses) }
+                        }
+                        resyncWeekIfDayChanged()
+                    }
                 }
             }
             return

@@ -475,7 +475,11 @@ private fun WeekHeader(
                 Text(
                     text = "第 $week 周 / 共 $total 周",
                     style = MaterialTheme.typography.titleMedium.copy(shadow = shadow),
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                 )
             }
         }
@@ -1437,7 +1441,7 @@ private fun WeekPickerDialog(
                                     .size(44.dp)
                                     .background(
                                         color = if (selected) {
-                                            MaterialTheme.colorScheme.primaryContainer
+                                            MaterialTheme.colorScheme.primary
                                         } else {
                                             MaterialTheme.colorScheme.surfaceVariant
                                         },
@@ -1446,7 +1450,9 @@ private fun WeekPickerDialog(
                                     .clickable { onPick(w) },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("$w", style = MaterialTheme.typography.bodyMedium)
+                                Text("$w", style = MaterialTheme.typography.bodyMedium,
+                                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
                             }
                         }
                     }

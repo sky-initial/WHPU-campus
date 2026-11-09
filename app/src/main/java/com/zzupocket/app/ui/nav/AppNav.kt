@@ -74,6 +74,7 @@ import com.zzupocket.app.ui.login.LoginScreen
 import com.zzupocket.app.ui.schedule.BackgroundCropScreen
 import com.zzupocket.app.ui.schedule.CourseOverviewScreen
 import com.zzupocket.app.ui.schedule.DisplaySettingsScreen
+import com.zzupocket.app.ui.schedule.PeriodSettingsScreen
 import com.zzupocket.app.ui.schedule.ScheduleScreen
 import com.zzupocket.app.ui.settings.AppearanceScreen
 import com.zzupocket.app.ui.schedule.WallpaperLayers
@@ -286,7 +287,12 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         onOpenOverview = { semesterId ->
                             navController.navigate("$ROUTE_OVERVIEW/$semesterId")
                         },
+                        onOpenPeriods = { semesterId -> navController.navigate("period_settings/$semesterId") },
                     )
+                }
+                composable("period_settings/{semesterId}") { entry ->
+                    val id = entry.arguments?.getString("semesterId")?.toIntOrNull() ?: return@composable
+                    PeriodSettingsScreen(id, onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = "$ROUTE_BG_CROP/{source}",
