@@ -1,13 +1,15 @@
 package com.zzupocket.app.ui.widget
 
 import com.zzupocket.app.core.ScheduleText
+import com.zzupocket.app.data.whpu.TimedWhpuExam
+import com.zzupocket.app.ui.nav.AppRoutes
 import com.zzupocket.app.domain.Period
 import com.zzupocket.app.domain.Session
 import java.time.LocalDate
 import java.util.Locale
 
 /**
- * 小组件口径的一节课。
+ * 小组件中的课程或考试条目；isExam 区分标签和点击目标。
  *
  * 时间统一换算成「当天第几分钟」（0..1439）：排序、"是不是还没下课"、算还剩多久
  * 都只是整数比较，不用反复解析 "08:00"。
@@ -18,7 +20,10 @@ data class WidgetCourse(
     val place: String,
     val startMin: Int,
     val endMin: Int,
+    val isExam: Boolean = false,
 ) {
+    val displayName: String get() = if (isExam) "考试 · $name" else name
+    val route: String get() = if (isExam) AppRoutes.EXAMS else AppRoutes.SCHEDULE
     /** "10:00" */
     val startText: String get() = WidgetSchedule.clock(startMin)
 
@@ -135,6 +140,7 @@ data class WidgetNextClassPlan(
     val statusMessage: String = "",
     /** 假期要整块盖住内容，所以单独一个标记（不靠文案去猜） */
     val isVacation: Boolean = false,
+    val isExam: Boolean = false,
 ) {
     val isStatus: Boolean get() = statusTitle.isNotBlank()
     val hasCourse: Boolean get() = name.isNotBlank()
@@ -193,6 +199,15 @@ object WidgetSchedule {
         )
     }
 
+    fun toExam(item: TimedWhpuExam): WidgetCourse = WidgetCourse(
+        code = "exam:${item.exam.courseCode ?: item.exam.courseName}",
+        name = item.exam.courseName,
+        place = listOfNotNull(item.exam.campus, item.exam.location).joinToString(" · ").ifBlank { "考场未公布" },
+        startMin = item.time.start.hour * 60 + item.time.start.minute,
+        endMin = item.time.end.hour * 60 + item.time.end.minute,
+        isExam = true,
+    )
+
     /** "08:00" / "8:00" → 480；解析不了返回 null */
     fun minuteOf(text: String?): Int? {
         val t = text?.trim().orEmpty()
@@ -209,7 +224,7 @@ object WidgetSchedule {
 
     /** 今天还没下课的课，按时间升序 */
     fun remainingToday(today: List<WidgetCourse>, nowMin: Int): List<WidgetCourse> =
-        today.filter { notEnded(it, nowMin) }.sortedBy { it.startMin }
+        today.filter { notEnded(it, nowMin) }.sortedWith(compareBy<WidgetCourse> { it.startMin }.thenByDescending { it.isExam })
 
     /** 一节课 → 一行（地点与时间段都在里面） */
     fun toRow(course: WidgetCourse): WidgetCourseRow = WidgetCourseRow(
@@ -279,7 +294,7 @@ object WidgetSchedule {
         nowMin: Int,
         maxRows: Int = 2,
     ): WidgetTwoDayPlan {
-        val courses = today.sortedBy { it.startMin }
+        val courses = today.sortedWith(compareBy<WidgetCourse> { it.startMin }.thenByDescending { it.isExam })
         val st = state(hasSchedule, week, courses, nowMin)
         val weekText = weekLabel(week)
         val take = maxRows.coerceAtLeast(1)
@@ -287,7 +302,8 @@ object WidgetSchedule {
         // 整块状态（假期 / 还没同步过课表）：两列都不画，换成居中一句话。
         // 以前只有假期走这条，未同步就退化成两列各写一句「无课程」—— 那是假的，
         // 用户会以为课表是空的，而不是"还没同步"。
-        if (st == WidgetCourseState.VACATION || st == WidgetCourseState.NOT_SYNCED) {
+        if ((st == WidgetCourseState.VACATION || st == WidgetCourseState.NOT_SYNCED) &&
+            (today + tomorrow).none { it.isExam }) {
             return WidgetTwoDayPlan(
                 week = "",
                 today = WidgetDayPlan(header = dateHeader("今天", todayDate), footer = "", rows = emptyList()),
@@ -298,19 +314,19 @@ object WidgetSchedule {
         }
 
         val todayRows = remainingToday(courses, nowMin)
-        val tomorrowRows = tomorrow.sortedBy { it.startMin }
+        val tomorrowRows = tomorrow.sortedWith(compareBy<WidgetCourse> { it.startMin }.thenByDescending { it.isExam })
 
         return WidgetTwoDayPlan(
             week = weekText,
             today = WidgetDayPlan(
                 header = dateHeader("今天", todayDate),
-                footer = if (todayRows.isEmpty()) "" else "剩余 ${todayRows.size} 节",
+                footer = countText("剩余", todayRows),
                 rows = todayRows.take(take).map(::toRow),
                 emptyText = if (todayRows.isEmpty()) "无课程" else "",
             ),
             tomorrow = WidgetDayPlan(
                 header = dateHeader("明天", tomorrowDate),
-                footer = if (tomorrowRows.isEmpty()) "" else "共有 ${tomorrowRows.size} 节",
+                footer = countText("共有", tomorrowRows),
                 rows = tomorrowRows.take(take).map(::toRow),
                 emptyText = if (tomorrowRows.isEmpty()) "无课程" else "",
             ),
@@ -319,8 +335,14 @@ object WidgetSchedule {
 
     // ── 2×2：一节课大字 + 圆气泡 + 一行预告 ──────────────────────────────
 
+    private fun countText(prefix: String, rows: List<WidgetCourse>): String = when {
+        rows.isEmpty() -> ""
+        rows.any { it.isExam } -> "$prefix ${rows.size} 项 · 考试 ${rows.count { it.isExam }} 场"
+        else -> "$prefix ${rows.size} 节"
+    }
+
     /** 「→ 14:00 程序设计基础」这种预告行 */
-    fun previewText(course: WidgetCourse): String = "→ ${course.startText} ${course.name}"
+    fun previewText(course: WidgetCourse): String = "→ ${course.startText} ${course.displayName}"
 
     /**
      * 「2×2」的内容。
@@ -342,11 +364,12 @@ object WidgetSchedule {
         nowMin: Int,
         previewRows: Int = 1,
     ): WidgetNextClassPlan {
-        val courses = today.sortedBy { it.startMin }
+        val courses = today.sortedWith(compareBy<WidgetCourse> { it.startMin }.thenByDescending { it.isExam })
         val st = state(hasSchedule, week, courses, nowMin)
         val weekSuffix = weekLabel(week).let { if (it.isBlank()) "" else " · $it" }
 
-        if (st == WidgetCourseState.NOT_SYNCED || st == WidgetCourseState.VACATION) {
+        if ((st == WidgetCourseState.NOT_SYNCED || st == WidgetCourseState.VACATION) &&
+            (today + tomorrow).none { it.isExam }) {
             return WidgetNextClassPlan(
                 header = "", remaining = 0, name = "", timeRange = "", place = "",
                 preview = "", code = "",
@@ -358,14 +381,14 @@ object WidgetSchedule {
         val remain = remainingToday(courses, nowMin)
         if (remain.isNotEmpty()) return nextClassOf(remain, "今天$weekSuffix", previewRows)
 
-        val tomorrowCourses = tomorrow.sortedBy { it.startMin }
+        val tomorrowCourses = tomorrow.sortedWith(compareBy<WidgetCourse> { it.startMin }.thenByDescending { it.isExam })
         if (tomorrowCourses.isNotEmpty()) {
             return nextClassOf(tomorrowCourses, "明日预告$weekSuffix", previewRows)
         }
 
         return WidgetNextClassPlan(
             header = "", remaining = 0, name = "", timeRange = "", place = "",
-            preview = "", code = "", statusTitle = statusTitle(st),
+            preview = "", code = "", statusTitle = if ((today + tomorrow).any { it.isExam }) "暂无待办安排" else statusTitle(st),
         )
     }
 
@@ -380,13 +403,14 @@ object WidgetSchedule {
             header = header,
             // 这节课以及之后还有几节（含本节）—— 与拾光的圆气泡口径一致
             remaining = courses.size,
-            name = first.name,
+            name = first.displayName,
             timeRange = first.rangeText,
             place = first.place,
             preview = courses.drop(1)
                 .take(previewRows.coerceAtLeast(0))
                 .joinToString("   ") { previewText(it) },
             code = first.code,
+            isExam = first.isExam,
         )
     }
 

@@ -18,6 +18,7 @@ object AppRoutes {
     /** 「更多」里的子页（不是 tab，进去之后底部导航栏会隐藏） */
     const val ELECTRICITY = "electricity"
     const val CLASS_DND = "class_dnd"
+    const val EXAMS = "exams"
     const val CARD = "campus_card"
 
     /**

@@ -108,7 +108,8 @@ object Widgets {
         subSizeDp: Int,
     ): RemoteViews {
         val rv = RemoteViews(context.packageName, R.layout.widget_course_row)
-        rv.setTextViewText(R.id.row_name, row.course.name)
+        rv.setTextViewText(R.id.row_name, row.course.displayName)
+        rv.setOnClickPendingIntent(R.id.row_root, openApp(context, row.course.route))
         rv.setTextViewText(R.id.row_place, row.place)
         rv.setTextViewText(R.id.row_time, row.timeRange)
         // 字号按画布分档动态设（XML 里是标准档基线；矮盒子用紧凑档防裁字）
@@ -258,6 +259,7 @@ object Widgets {
         AppRoutes.SCHEDULE -> 1
         AppRoutes.ELECTRICITY -> 2
         AppRoutes.CARD -> 3
+        AppRoutes.EXAMS -> 4
         else -> 9
     }
 

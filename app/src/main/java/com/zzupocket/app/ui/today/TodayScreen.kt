@@ -75,6 +75,7 @@ fun TodayScreen(
     onOpenLogin: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenSchedule: () -> Unit,
+    onOpenExams: () -> Unit,
     onOpenElectricity: () -> Unit,
     onOpenCard: () -> Unit,
     onOpenLibrary: () -> Unit = {},
@@ -131,6 +132,8 @@ fun TodayScreen(
             }
 
             // ① 今天的时间轴：上课 / 已完成的专注（课间空档不画，见 TodayTimelineCard 的注释）
+            TodayExamsCard(onOpenExams)
+
             TodayTimelineCard(state = timeline, onOpenSchedule = onOpenSchedule)
 
             // ② 今天的日程：自己在课表里加的（没有就不显示这张卡）

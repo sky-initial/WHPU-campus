@@ -95,7 +95,7 @@ enum class Destination(
 
 /** 非 tab 的全屏页面：这些路由下不显示底部导航栏 */
 private const val ROUTE_LOGIN = "login"
-private const val ROUTE_EXAMS = "exams"
+private const val ROUTE_EXAMS = AppRoutes.EXAMS
 private const val ROUTE_EXAM_LOGIN = "exam_login"
 private const val ROUTE_GRADES = "grades"
 private const val ROUTE_GRADE_LOGIN = "grade_login"
@@ -218,6 +218,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         onOpenLogin = { navController.navigate(ROUTE_LOGIN) },
                         onOpenDiagnostics = { navController.navigate(ROUTE_DIAGNOSTICS) },
                         onOpenSchedule = { switchTab(Destination.SCHEDULE.route) },
+                        onOpenExams = { navController.navigate(ROUTE_EXAMS) },
                         onOpenElectricity = { navController.navigate(ROUTE_ELECTRICITY) },
                         onOpenCard = { navController.navigate(ROUTE_CARD) },
                         onOpenLibrary = { navController.navigate(ROUTE_LIBRARY) },
