@@ -105,7 +105,6 @@ private const val ROUTE_OVERVIEW = "course_overview"
 private const val ROUTE_DISPLAY = "display_settings"
 private const val ROUTE_FOCUS_STATS = "focus_stats"
 private const val ROUTE_BG_CROP = "background_crop"
-private const val ROUTE_ROOMS = "room_occupancy"
 
 // 这两个路由同时被桌面小组件用到（点电量去电费页、点余额去校园卡页），
 // 所以统一从 AppRoutes 取，避免两边各写一份字面量、改名时静默失效。
@@ -223,7 +222,6 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         onOpenElectricity = { navController.navigate(ROUTE_ELECTRICITY) },
                         onOpenCard = { navController.navigate(ROUTE_CARD) },
                         onOpenLibrary = { navController.navigate(ROUTE_LIBRARY) },
-                        onOpenRooms = { navController.navigate(ROUTE_ROOMS) },
                     )
                 }
                 composable(Destination.SCHEDULE.route) {
@@ -318,9 +316,6 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     UnavailableCampusService()
                 }
                 composable(ROUTE_CARD) {
-                    UnavailableCampusService()
-                }
-                composable(ROUTE_ROOMS) {
                     UnavailableCampusService()
                 }
                 composable(ROUTE_LIBRARY) {

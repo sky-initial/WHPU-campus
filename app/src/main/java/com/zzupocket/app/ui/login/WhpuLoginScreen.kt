@@ -51,6 +51,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
     var pickerInitial by rememberSaveable { mutableStateOf(WhpuCalendar.today().toString()) }
     var dateError by remember { mutableStateOf<String?>(null) }
     var controlsExpanded by rememberSaveable { mutableStateOf(false) }
+    var confirmClearSession by rememberSaveable { mutableStateOf(false) }
     val controlsMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.42f
     var year by rememberSaveable { mutableIntStateOf(WhpuCalendar.today().let { if (it.monthValue >= 9) it.year else it.year - 1 }) }
     var termCode by rememberSaveable { mutableStateOf("3") }
@@ -132,9 +133,31 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
         )
     }
 
+    if (confirmClearSession) AlertDialog(
+        onDismissRequest = { confirmClearSession = false },
+        title = { Text("清除应用内网页登录状态？") },
+        text = { Text("这会清除本应用所有内置网页的登录状态，包括教务、校园卡和座位预约，之后需要重新登录。离线课表、成绩、考试、日程和设置保留；外部浏览器不受影响。") },
+        dismissButton = { TextButton(onClick = { confirmClearSession = false }) { Text("取消") } },
+        confirmButton = { TextButton(onClick = {
+            confirmClearSession = false
+            busy = true
+            academicPage = false
+            webView?.stopLoading()
+            AppGraph.whpuSessionManager.clear()
+            imported = false
+            WebStorage.getInstance().deleteAllData()
+            CookieManager.getInstance().removeAllCookies {
+                CookieManager.getInstance().flush()
+                webView?.clearHistory()
+                webView?.loadUrl(WhpuWebPolicy.LOGIN)
+                busy = false
+                message = "已清除应用内全部网页登录状态，本地缓存保留。"
+            }
+        }) { Text("清除登录状态") } },
+    )
     Scaffold(
         topBar = { TopAppBar(title = { Text(if (signInOnly) "学校登录" else "学校登录与课表同步") }, navigationIcon = {
-            TextButton(onClick = onBack) { Text("返回") }
+            TextButton(onClick = onBack) { Text(if (signInOnly) "返回$queryName" else "返回") }
         }) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -147,7 +170,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                     Text(message, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(enabled = !busy && academicPage, onClick = {
+                        Button(enabled = !busy && (signInOnly || academicPage), onClick = {
                             if (signInOnly) onImported() else startSync()
                         }) {
                             Text(if (signInOnly) "返回${queryName}" else if (busy) "同步中…" else "同步到课表")
@@ -157,21 +180,9 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                             message = "已取消同步，原缓存保留。"
                         }) { Text("取消同步") }
                         if (imported) TextButton(onClick = onImported) { Text("查看课表") }
-                        TextButton(enabled = !busy, onClick = {
-                            busy = true
-                            webView?.stopLoading()
-                            AppGraph.whpuSessionManager.clear()
-                            imported = false
-                            WebStorage.getInstance().deleteAllData()
-                            CookieManager.getInstance().removeAllCookies {
-                                webView?.post {
-                                    CookieManager.getInstance().flush()
-                                    webView?.clearHistory(); webView?.loadUrl(WhpuWebPolicy.LOGIN)
-                                    busy = false
-                                }
-                            }
-                            message = "已清除本机网页登录状态，离线课表保留。"
-                        }) { Text("清除登录态 / 换账号") }
+                        TextButton(enabled = !busy, onClick = { confirmClearSession = true }) {
+                            Text("清除网页登录态 / 换账号")
+                        }
                     }
                     Text("学校页面：$host", style = MaterialTheme.typography.labelSmall)
                     TextButton(enabled = !busy, onClick = {
