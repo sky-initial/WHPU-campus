@@ -79,7 +79,6 @@ fun TodayScreen(
     onOpenElectricity: () -> Unit,
     onOpenCard: () -> Unit,
     onOpenLibrary: () -> Unit = {},
-    onOpenRooms: () -> Unit = {},
     vm: TodayViewModel = viewModel(),
     timelineVm: TodayTimelineViewModel = viewModel(),
     cardVm: TodayCardViewModel = viewModel(),
@@ -148,12 +147,6 @@ fun TodayScreen(
                 title = "图书馆 · 座位预约",
                 subtitle = "暂未接入",
                 onOpen = onOpenLibrary,
-            )
-            LibraryEntryCard(
-                icon = Icons.Filled.MeetingRoom,
-                title = "空教室查询",
-                subtitle = "暂未接入",
-                onOpen = onOpenRooms,
             )
 
             // ③ 宿舍电量（底部带"近 7 天"摘要行，完整的趋势图在电费页）

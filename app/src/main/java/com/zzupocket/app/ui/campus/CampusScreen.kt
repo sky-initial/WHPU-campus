@@ -65,7 +65,7 @@ import com.zzupocket.app.ui.nav.DOCK_CLEARANCE
 import kotlinx.coroutines.launch
 
 /**
- * 「校园」= 分组入口页（空教室已按需求从「课表」移到这里）。
+ * 「校园」= 分组入口页。
  *
  * 只放用户功能入口；开发期的接口自检收在「登录状态」页里，且只在 debug 包显示。
  */
@@ -76,7 +76,6 @@ fun CampusScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenElectricity: () -> Unit = {},
     onOpenCard: () -> Unit = {},
-    onOpenRooms: () -> Unit = {},
     onOpenLibrary: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenAppearance: () -> Unit = {},
@@ -123,7 +122,6 @@ fun CampusScreen(
 
             GroupTitle("学习空间")
             EntryCard {
-                Entry(Icons.Filled.MeetingRoom, "教室占用", "按楼看每间教室哪一节有课", onOpenRooms)
                 Entry(Icons.Filled.EventSeat, "图书馆座位预约", "学校原版网页（需联网）", onOpenLibrary)
             }
 
