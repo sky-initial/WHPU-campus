@@ -153,7 +153,7 @@ fun TodayScreen(
             LibraryEntryCard(
                 icon = Icons.Filled.Bolt,
                 title = "宿舍电费",
-                subtitle = "官方网页 · 部分楼栋入口暂不可用",
+                subtitle = "官方网页 · 服务异常时稍后重试",
                 onOpen = onOpenElectricity,
             )
 

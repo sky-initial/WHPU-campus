@@ -45,3 +45,6 @@
 - [成绩与考试学期记忆](whpu-query-terms.md)：独立保存查询选择、离线恢复、今日与组件入口的当前学期定位。
 
 - [校园服务网页入口](whpu-campus-services.md)：已核对入口、网页认证边界、原生查询前置条件。
+
+- [校园卡接口核验](whpu-campus-card-evidence.md)
+- [rc4 发布验收](whpu-rc4-validation.md)

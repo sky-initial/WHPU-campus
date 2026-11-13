@@ -4,7 +4,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 enum class WhpuCampusService(val title: String, val entry: String, val instruction: String) {
     CARD("校园卡", PORTAL_ENTRY, "在融合门户选择“虚拟校园卡”，查看余额与账单。"),
-    ELECTRICITY("宿舍电费", PORTAL_ENTRY, "在融合门户选择“虚拟校园卡 → 电费缴纳”，再选择对应楼栋。部分楼栋入口暂不可用。"),
+    ELECTRICITY("宿舍电费", PORTAL_ENTRY, "在融合门户选择“虚拟校园卡 → 电费缴纳”，再选择对应楼栋。若学校服务暂时不可用，请稍后重试。"),
     SEAT("座位预约", SEAT_ENTRY, "使用学校官方页面选座、预约和签到。"),
     ;
 
