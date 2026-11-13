@@ -128,7 +128,20 @@ fun ScheduleScreen(
     var showSemesters by remember { mutableStateOf(false) }
     var showWeekPicker by remember { mutableStateOf(false) }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.onResume() }
+    var today by remember { mutableStateOf(com.zzupocket.app.data.whpu.WhpuCalendar.today()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
+        vm.onResume()
+    }
+    val visibleWeeks = if (state.gradMode) state.gmsWeeks else state.weeks
+    val actualWeek = state.weekStart?.takeIf { state.weekConfirmed }
+        ?.let { WeekMath.weekIndexAt(it, today) }?.takeIf { it in visibleWeeks }
 
     if (!state.loading && state.selectedSemester?.id?.let {
             com.zzupocket.app.data.whpu.WhpuTerm.fromSemesterId(it) != null
@@ -274,6 +287,7 @@ fun ScheduleScreen(
                 state.gradMode && state.gmsSessions.isNotEmpty() -> {
                     WeekHeader(
                         week = state.gmsWeekIndex,
+                        isActualWeek = state.gmsWeekIndex == actualWeek,
                         total = state.gmsWeekCount,
                         onPick = { showWeekPicker = true },
                         onWallpaper = prefs.backgroundPath != null,
@@ -318,6 +332,7 @@ fun ScheduleScreen(
                 else -> {
                     WeekHeader(
                         week = state.weekIndex,
+                        isActualWeek = state.weekIndex == actualWeek,
                         total = state.weekCount,
                         onPick = { showWeekPicker = true },
                         onWallpaper = prefs.backgroundPath != null,
@@ -369,6 +384,7 @@ fun ScheduleScreen(
         WeekPickerDialog(
             weeks = if (state.gradMode) state.gmsWeeks else state.weeks,
             current = if (state.gradMode) state.gmsWeekIndex else state.weekIndex,
+            actualWeek = actualWeek,
             onPick = {
                 if (state.gradMode) vm.goToGmsWeek(it) else vm.goToWeek(it)
                 showWeekPicker = false
@@ -448,6 +464,7 @@ private fun SemesterButton(semester: Semester?, onClick: () -> Unit) {
 @Composable
 private fun WeekHeader(
     week: Int,
+    isActualWeek: Boolean,
     total: Int,
     onPick: () -> Unit,
     onWallpaper: Boolean = false,
@@ -473,10 +490,10 @@ private fun WeekHeader(
                 // "这是哪几天"改由星期表头下面那行日期回答（每一列都有，翻到哪一周都看得出来）。
                 // 也刻意不再显示「9/7 起」：用户觉得表头上挂基准日太啰嗦，基准改到设置页里看。
                 Text(
-                    text = "第 $week 周 / 共 $total 周",
+                    text = (if (isActualWeek) "本周 · " else "") + "第 $week 周 / 共 $total 周",
                     style = MaterialTheme.typography.titleMedium.copy(shadow = shadow),
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = if (isActualWeek) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isActualWeek) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -1424,6 +1441,7 @@ private fun SemesterSheet(
 private fun WeekPickerDialog(
     weeks: List<Int>,
     current: Int,
+    actualWeek: Int?,
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1438,21 +1456,34 @@ private fun WeekPickerDialog(
                             val selected = w == current
                             Box(
                                 modifier = Modifier
-                                    .size(44.dp)
+                                    .width(44.dp)
+                                    .heightIn(min = 56.dp)
                                     .background(
-                                        color = if (selected) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
+                                        color = when {
+                                            w == actualWeek -> MaterialTheme.colorScheme.primary
+                                            selected -> MaterialTheme.colorScheme.secondaryContainer
+                                            else -> MaterialTheme.colorScheme.surfaceVariant
                                         },
                                         shape = RoundedCornerShape(8.dp),
                                     )
-                                    .clickable { onPick(w) },
+                                    .clickable { onPick(w) }
+                                    .padding(vertical = 4.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("$w", style = MaterialTheme.typography.bodyMedium,
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                                val textColor = when {
+                                    w == actualWeek -> MaterialTheme.colorScheme.onPrimary
+                                    selected -> MaterialTheme.colorScheme.onSecondaryContainer
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("$w", style = MaterialTheme.typography.bodyMedium,
+                                        color = textColor,
+                                        fontWeight = if (w == actualWeek) FontWeight.Bold else FontWeight.Normal)
+                                    if (w == actualWeek || selected) Text(
+                                        if (w == actualWeek) "本周" else "查看",
+                                        style = MaterialTheme.typography.labelSmall, color = textColor,
+                                    )
+                                }
                             }
                         }
                     }
