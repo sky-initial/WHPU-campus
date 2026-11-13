@@ -5,6 +5,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.CookieJar
@@ -15,35 +17,41 @@ import okhttp3.Response
 
 /** In-memory only. The future WebView handoff must check its origin and navigation generation. */
 class WhpuCardSession {
+    private val mutex = Mutex()
     private var authorization: String? = null
     private var userAgent: String? = null
     private var revision = 0L
 
-    @Synchronized fun accept(token: String, tokenType: String = "bearer", userAgent: String) {
+    suspend fun accept(token: String, tokenType: String = "bearer", userAgent: String) = mutex.withLock {
         require(token.isNotBlank() && token.none { it.isWhitespace() || it.isISOControl() })
         require(tokenType.equals("bearer", ignoreCase = true))
         require(userAgent.isNotBlank() && '\r' !in userAgent && '\n' !in userAgent)
         authorization = "bearer $token"
         this.userAgent = userAgent
-        revision++
+        revision += 1
     }
 
-    @Synchronized fun clear() {
+    suspend fun clear() = mutex.withLock {
         authorization = null
         userAgent = null
-        revision++
+        revision += 1
     }
 
-    @Synchronized internal fun capture(): Lease = Lease(
+    internal suspend fun currentRevision(): Long = mutex.withLock { revision }
+
+    internal suspend fun capture(): Lease = mutex.withLock { Lease(
         revision, authorization ?: throw WhpuCardException.SessionExpired(),
         userAgent ?: throw WhpuCardException.SessionExpired(),
-    )
+    ) }
 
-    @Synchronized internal fun check(expectedRevision: Long) {
+    internal suspend fun check(expectedRevision: Long) = withCurrent(expectedRevision) { }
+
+    internal suspend fun <T> withCurrent(expectedRevision: Long, block: suspend () -> T): T = mutex.withLock {
         if (revision != expectedRevision) throw WhpuCardException.SessionChanged()
+        block()
     }
 
-    internal fun check(lease: Lease) = check(lease.revision)
+    internal suspend fun check(lease: Lease) = check(lease.revision)
 
     // Not a data class: generated toString/copy must not expose credentials.
     internal class Lease(val revision: Long, val authorization: String, val userAgent: String)

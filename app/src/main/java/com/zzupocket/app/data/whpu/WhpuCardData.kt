@@ -6,11 +6,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.ResolverStyle
 import kotlinx.serialization.json.*
+import kotlinx.serialization.Serializable
 
 /** Identity comes from the campus-card service, independently of the academic account. */
-data class WhpuCardOwner(val id: String)
-data class WhpuCard(val account: String, val name: String, val balanceFen: Long)
-data class WhpuCardTransaction(
+@Serializable data class WhpuCardOwner(val id: String)
+@Serializable data class WhpuCard(val account: String, val name: String, val balanceFen: Long)
+@Serializable data class WhpuCardTransaction(
     val cardAccount: String,
     val orderId: String,
     val amountFen: Long,

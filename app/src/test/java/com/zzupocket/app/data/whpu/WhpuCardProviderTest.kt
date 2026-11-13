@@ -18,7 +18,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WhpuCardProviderTest {
-    private fun session() = WhpuCardSession().apply { accept("synthetic-secret", userAgent = "synthetic-webview") }
+    private suspend fun session() = WhpuCardSession().apply { accept("synthetic-secret", userAgent = "synthetic-webview") }
     private fun body(request: Request): String = when (request.url.encodedPath) {
         "/berserker-base/user" -> CardFixture.owner()
         "/berserker-app/frontInfo" -> CardFixture.config()
@@ -79,7 +79,7 @@ class WhpuCardProviderTest {
     @Test fun sessionSwitchDuringRequestRejectsOldResult() = runTest {
         val session = session()
         val api = WhpuCardProvider(session, client {
-            if (it.url.encodedPath.endsWith("queryCard")) session.accept("other-synthetic", userAgent = "synthetic-webview")
+            if (it.url.encodedPath.endsWith("queryCard")) runBlocking { session.accept("other-synthetic", userAgent = "synthetic-webview") }
             200 to body(it)
         })
         assertTrue(runCatching { api.fetch() }.exceptionOrNull() is WhpuCardException.SessionChanged)
@@ -128,11 +128,25 @@ class WhpuCardProviderTest {
         assertTrue(failure is WhpuCardException.Network)
         assertFalse(failure!!.stackTraceToString().contains("private-network-detail"))
     }
-    @Test fun sessionAndLeaseToStringDoNotExposeCredentials() {
+    @Test fun sessionAndLeaseToStringDoNotExposeCredentials() = runTest {
         val session = session()
         assertFalse(session.toString().contains("synthetic-secret"))
         assertFalse(session.capture().toString().contains("synthetic-secret"))
         assertTrue(runCatching { session.accept("invalid\nvalue", userAgent = "synthetic-webview") }.isFailure)
+    }
+    @Test fun sessionChangeWaitsForGuardedCacheCommit() = runTest {
+        val session = session()
+        val revision = session.currentRevision()
+        val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val finish = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val commit = async { session.withCurrent(revision) { entered.complete(Unit); finish.await() } }
+        entered.await()
+        val clear = async { session.clear() }
+        kotlinx.coroutines.yield()
+        assertFalse(clear.isCompleted)
+        finish.complete(Unit)
+        commit.await(); clear.await()
+        assertTrue(runCatching { session.check(revision) }.exceptionOrNull() is WhpuCardException.SessionChanged)
     }
     @Test fun cancellingFetchCancelsNetworkCall() = runBlocking {
         val started = CountDownLatch(1)
