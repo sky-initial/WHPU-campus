@@ -35,6 +35,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,11 +64,9 @@ import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.data.update.AppUpdate
 import com.zzupocket.app.data.update.UpdateCenter
 import com.zzupocket.app.ui.about.AboutScreen
-import com.zzupocket.app.ui.campus.CampusScreen
-import com.zzupocket.app.ui.campus.CardScreen
-import com.zzupocket.app.ui.campus.ElectricityScreen
-import com.zzupocket.app.ui.campus.RoomScreen
-import com.zzupocket.app.ui.library.LibraryScreen
+import com.zzupocket.app.ui.campus.CampusServiceScreen
+import com.zzupocket.app.ui.campus.LibraryServicesScreen
+import com.zzupocket.app.data.whpu.WhpuCampusService
 import com.zzupocket.app.ui.diag.DiagnosticsScreen
 import com.zzupocket.app.ui.focus.FocusScreen
 import com.zzupocket.app.ui.focus.FocusStatsScreen
@@ -237,13 +237,15 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     FocusScreen(onOpenStats = { navController.navigate(ROUTE_FOCUS_STATS) })
                 }
                 composable(Destination.CAMPUS.route) {
-                    Column(Modifier.statusBarsPadding().padding(24.dp)) {
+                    Column(Modifier.statusBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp).padding(bottom = DOCK_CLEARANCE)) {
                         Text("校园服务", style = MaterialTheme.typography.titleLarge)
                         TextButton(onClick = { navController.navigate(ROUTE_LOGIN) }) { Text("学校登录与课表同步") }
                         TextButton(onClick = { navController.navigate(ROUTE_GRADES) }) { Text("成绩查询") }
                         TextButton(onClick = { navController.navigate(ROUTE_EXAMS) }) { Text("考试安排") }
                         TextButton(onClick = { navController.navigate(AppRoutes.CLASS_DND) }) { Text("上课免打扰") }
-                        Text("校园卡、电费和图书馆正在适配。")
+                        TextButton(onClick = { navController.navigate(ROUTE_CARD) }) { Text("校园卡") }
+                        TextButton(onClick = { navController.navigate(ROUTE_ELECTRICITY) }) { Text("宿舍电费") }
+                        TextButton(onClick = { navController.navigate(ROUTE_LIBRARY) }) { Text("图书馆") }
                         TextButton(onClick = { navController.navigate(ROUTE_APPEARANCE) }) { Text("外观设置") }
                         TextButton(onClick = { navController.navigate(ROUTE_ABOUT) }) { Text("关于") }
                     }
@@ -257,7 +259,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 composable(ROUTE_ABOUT) {
                     Column(Modifier.statusBarsPadding().padding(24.dp)) {
                         Text("WHPU Pocket", style = MaterialTheme.typography.titleLarge)
-                        Text("支持学校页面登录与课表同步，未导入时展示虚构演示课表。其他校园服务正在适配。")
+                        Text("支持真实课表、成绩和考试查询及离线缓存，未导入时展示虚构演示课表。校园卡、电费和图书馆提供官方网页入口，网页内容需联网查看。")
                         Text("基于 ZZUPocket 开发，保留原项目 MIT 许可证及版权声明。")
                         TextButton(onClick = { navController.popBackStack() }) { Text("返回") }
                     }
@@ -313,13 +315,17 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     FocusStatsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_ELECTRICITY) {
-                    UnavailableCampusService()
+                    CampusServiceScreen(WhpuCampusService.ELECTRICITY, onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_CARD) {
-                    UnavailableCampusService()
+                    CampusServiceScreen(WhpuCampusService.CARD, onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_LIBRARY) {
-                    UnavailableCampusService()
+                    LibraryServicesScreen(onBack = { navController.popBackStack() },
+                        onSeat = { navController.navigate(AppRoutes.SEAT) })
+                }
+                composable(AppRoutes.SEAT) {
+                    CampusServiceScreen(WhpuCampusService.SEAT, onBack = { navController.popBackStack() })
                 }
                 listOf(ROUTE_EXAMS, AppRoutes.CURRENT_EXAMS).forEach { route ->
                     composable(route) {

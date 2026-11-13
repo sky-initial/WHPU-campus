@@ -106,7 +106,13 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
             })
     }
     DisposableEffect(Unit) {
-        onDispose { syncJob?.cancel(); webView?.stopLoading(); webView?.destroy() }
+        onDispose {
+            syncJob?.cancel()
+            val view = webView
+            webView = null
+            view?.stopLoading()
+            view?.destroy()
+        }
     }
     pendingSemesterId?.let { semesterId ->
         WeekStartWheelDialog(
