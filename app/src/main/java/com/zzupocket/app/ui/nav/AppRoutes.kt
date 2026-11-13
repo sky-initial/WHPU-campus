@@ -19,6 +19,7 @@ object AppRoutes {
     const val ELECTRICITY = "electricity"
     const val CLASS_DND = "class_dnd"
     const val EXAMS = "exams"
+    const val CURRENT_EXAMS = "current_exams"
     const val CARD = "campus_card"
 
     /**
@@ -28,4 +29,7 @@ object AppRoutes {
      * 这类 Activity 重建会再次执行跳转，用户正看着明细时会被莫名弹回去。
      */
     const val EXTRA_ROUTE = "com.zzupocket.app.extra.ROUTE"
+
+    // 兼容已放置的小组件；其 exams 入口始终查看当前课表学期。
+    fun widgetDestination(route: String): String = if (route == EXAMS) CURRENT_EXAMS else route
 }

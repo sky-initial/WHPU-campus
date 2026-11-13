@@ -12,6 +12,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.zzupocket.app.core.WeekSettings
 import com.zzupocket.app.core.WeekSource
 import com.zzupocket.app.core.WeekStartDay
+import com.zzupocket.app.data.whpu.WhpuQuery
+import com.zzupocket.app.data.whpu.WhpuTerm
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -142,9 +144,15 @@ data class UiPrefs(
 
 private val Context.uiPrefsStore: DataStore<Preferences> by preferencesDataStore(name = "ui_prefs")
 
-class UiPrefsStore(context: Context) {
+class UiPrefsStore internal constructor(private val store: DataStore<Preferences>) {
+    constructor(context: Context) : this(context.applicationContext.uiPrefsStore)
 
-    private val store = context.applicationContext.uiPrefsStore
+    suspend fun queryTerm(query: WhpuQuery): WhpuTerm? =
+        store.data.first()[queryTermKey(query)]?.let(WhpuTerm::fromSemesterId)
+
+    suspend fun saveQueryTerm(query: WhpuQuery, term: WhpuTerm) = store.edit {
+        it[queryTermKey(query)] = term.semesterId
+    }
 
     val flow: Flow<UiPrefs> = store.data.map { p ->
         UiPrefs(
@@ -313,6 +321,7 @@ class UiPrefsStore(context: Context) {
     }
 
     private companion object {
+        fun queryTermKey(query: WhpuQuery) = intPreferencesKey("whpu_query_term_${query.name.lowercase()}")
         val KEY_SHOW_WEEKEND = booleanPreferencesKey("show_weekend")
         val KEY_BLOCK_BORDER = stringPreferencesKey("block_border")
         val KEY_TEXT_MODE = stringPreferencesKey("course_text_mode")

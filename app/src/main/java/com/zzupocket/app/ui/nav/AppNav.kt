@@ -159,7 +159,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
             switchTab(initialRoute)
         } else {
             // 非 tab 的整页（电费/校园卡）：就是普通压栈，和 App 内点进去一样
-            navController.navigate(initialRoute)
+            navController.navigate(AppRoutes.widgetDestination(initialRoute))
         }
     }
 
@@ -219,7 +219,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         onOpenLogin = { navController.navigate(ROUTE_LOGIN) },
                         onOpenDiagnostics = { navController.navigate(ROUTE_DIAGNOSTICS) },
                         onOpenSchedule = { switchTab(Destination.SCHEDULE.route) },
-                        onOpenExams = { navController.navigate(ROUTE_EXAMS) },
+                        onOpenExams = { navController.navigate(AppRoutes.CURRENT_EXAMS) },
                         onOpenElectricity = { navController.navigate(ROUTE_ELECTRICITY) },
                         onOpenCard = { navController.navigate(ROUTE_CARD) },
                         onOpenLibrary = { navController.navigate(ROUTE_LIBRARY) },
@@ -326,11 +326,14 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 composable(ROUTE_LIBRARY) {
                     UnavailableCampusService()
                 }
-                composable(ROUTE_EXAMS) {
-                    com.zzupocket.app.ui.exams.WhpuExamScreen(
-                        onBack = { navController.popBackStack() },
-                        onLogin = { navController.navigate(ROUTE_EXAM_LOGIN) },
-                    )
+                listOf(ROUTE_EXAMS, AppRoutes.CURRENT_EXAMS).forEach { route ->
+                    composable(route) {
+                        com.zzupocket.app.ui.exams.WhpuExamScreen(
+                            onBack = { navController.popBackStack() },
+                            onLogin = { navController.navigate(ROUTE_EXAM_LOGIN) },
+                            preferCurrentTerm = route == AppRoutes.CURRENT_EXAMS,
+                        )
+                    }
                 }
                 composable(ROUTE_EXAM_LOGIN) {
                     com.zzupocket.app.ui.login.WhpuLoginScreen(
