@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -15,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.whpu.*
 import com.zzupocket.app.ui.components.WhpuTermSelector
+import com.zzupocket.app.ui.components.whpuQueryTermViewModel
 import com.zzupocket.app.ui.components.GlassCard
 import com.zzupocket.app.ui.login.WhpuAccountChangeDialog
 import com.zzupocket.app.ui.widget.Widgets
@@ -26,23 +26,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit) {
+fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit, preferCurrentTerm: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val today = remember { WhpuCalendar.today() }
-    var year by rememberSaveable { mutableIntStateOf(if (today.monthValue >= 9) today.year else today.year - 1) }
-    var code by rememberSaveable { mutableStateOf(if (today.monthValue in 2..8) "12" else "3") }
-    var initialTermLoaded by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!initialTermLoaded) {
-            AppGraph.scheduleRepository.currentSemester()?.id?.let(WhpuTerm::fromSemesterId)?.let {
-                year = it.year
-                code = it.code
-            }
-            initialTermLoaded = true
-        }
-    }
-    val term = WhpuTerm(year, code)
+    val termViewModel = whpuQueryTermViewModel(WhpuQuery.EXAMS, preferCurrentTerm)
+    val selection by termViewModel.state.collectAsStateWithLifecycle()
+    val term = selection.term
     val repository = AppGraph.whpuExamRepository
     val cacheFlow = remember(term) { repository.observe(term) }
     val cached by cacheFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -101,13 +90,14 @@ fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
-                WhpuTermSelector(term, enabled = !busy && initialTermLoaded, onSelect = {
-                    year = it.year
-                    code = it.code
-                })
+                WhpuTermSelector(term, enabled = !busy && selection.enabled, onSelect = termViewModel::select)
+                selection.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                    if (!selection.loaded) TextButton(onClick = termViewModel::load) { Text("重试") }
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { refresh() }, enabled = !busy && initialTermLoaded) { Text(if (busy) "刷新中…" else "刷新考试安排") }
-                    TextButton(onClick = onLogin, enabled = !busy && initialTermLoaded) { Text("学校登录 / 换账号") }
+                    Button(onClick = { refresh() }, enabled = !busy && selection.enabled) { Text(if (busy) "刷新中…" else "刷新考试安排") }
+                    TextButton(onClick = onLogin, enabled = !busy && selection.enabled) { Text("学校登录 / 换账号") }
                     if (job?.isActive == true) TextButton(onClick = {
                         job?.cancel(); message = "已取消刷新，原缓存保留。"
                     }) { Text("取消刷新") }
@@ -115,7 +105,9 @@ fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit) {
                 message?.let { Text(it, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium) }
             }
             item {
-                if (snapshot == null) {
+                if (!selection.loaded) {
+                    Text("正在恢复学期选择…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (snapshot == null) {
                     Text("本学期尚无考试安排缓存。登录学校后点击刷新。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     Text("学校考试 · 本地缓存 · ${snapshot.exams.size} 条", style = MaterialTheme.typography.titleSmall)
@@ -124,7 +116,7 @@ fun WhpuExamScreen(onBack: () -> Unit, onLogin: () -> Unit) {
                     if (snapshot.exams.isEmpty()) Text("学校本次查询返回本学期暂无考试安排。", modifier = Modifier.padding(top = 12.dp))
                 }
             }
-            items(snapshot?.exams.orEmpty()) { exam ->
+            items(snapshot?.exams.orEmpty().takeIf { selection.loaded }.orEmpty()) { exam ->
                 GlassCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(exam.courseName, style = MaterialTheme.typography.titleMedium)
