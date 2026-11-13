@@ -1,10 +1,14 @@
 package com.zzupocket.app
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -12,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.prefs.UiPrefs
+import com.zzupocket.app.data.prefs.DarkMode
 import com.zzupocket.app.ui.nav.AppNav
 import com.zzupocket.app.ui.nav.AppRoutes
 import com.zzupocket.app.ui.theme.ZZUPocketTheme
@@ -42,6 +47,19 @@ class MainActivity : ComponentActivity() {
             // 配色与深浅色是全局设置，直接在这里喂给主题（改完立刻全应用生效）
             val prefs by AppGraph.uiPrefsStore.flow
                 .collectAsStateWithLifecycle(initialValue = UiPrefs())
+            val dark = when (prefs.darkMode) {
+                DarkMode.SYSTEM -> isSystemInDarkTheme()
+                DarkMode.LIGHT -> false
+                DarkMode.DARK -> true
+            }
+            SideEffect {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT) { dark },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        Color.argb(0xe6, 0xff, 0xff, 0xff), Color.argb(0x80, 0x1b, 0x1b, 0x1b),
+                    ) { dark },
+                )
+            }
             ZZUPocketTheme(
                 darkMode = prefs.darkMode,
                 preset = prefs.themePreset,

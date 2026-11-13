@@ -1437,6 +1437,7 @@ private fun SemesterSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WeekPickerDialog(
     weeks: List<Int>,
@@ -1449,42 +1450,44 @@ private fun WeekPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("跳转到教学周") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                weeks.chunked(6).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { w ->
-                            val selected = w == current
-                            Box(
-                                modifier = Modifier
-                                    .width(44.dp)
-                                    .heightIn(min = 56.dp)
-                                    .background(
-                                        color = when {
-                                            w == actualWeek -> MaterialTheme.colorScheme.primary
-                                            selected -> MaterialTheme.colorScheme.secondaryContainer
-                                            else -> MaterialTheme.colorScheme.surfaceVariant
-                                        },
-                                        shape = RoundedCornerShape(8.dp),
-                                    )
-                                    .clickable { onPick(w) }
-                                    .padding(vertical = 4.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                val textColor = when {
-                                    w == actualWeek -> MaterialTheme.colorScheme.onPrimary
-                                    selected -> MaterialTheme.colorScheme.onSecondaryContainer
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("$w", style = MaterialTheme.typography.bodyMedium,
-                                        color = textColor,
-                                        fontWeight = if (w == actualWeek) FontWeight.Bold else FontWeight.Normal)
-                                    if (w == actualWeek || selected) Text(
-                                        if (w == actualWeek) "本周" else "查看",
-                                        style = MaterialTheme.typography.labelSmall, color = textColor,
-                                    )
-                                }
-                            }
+            val cellWidth = 48.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceAtLeast(1f)
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                maxItemsInEachRow = 6,
+            ) {
+                weeks.forEach { w ->
+                    val selected = w == current
+                    Box(
+                        modifier = Modifier
+                            .width(cellWidth)
+                            .heightIn(min = 56.dp)
+                            .background(
+                                color = when {
+                                    w == actualWeek -> MaterialTheme.colorScheme.primary
+                                    selected -> MaterialTheme.colorScheme.secondaryContainer
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .clickable { onPick(w) }
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val textColor = when {
+                            w == actualWeek -> MaterialTheme.colorScheme.onPrimary
+                            selected -> MaterialTheme.colorScheme.onSecondaryContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("$w", style = MaterialTheme.typography.bodyMedium,
+                                color = textColor,
+                                fontWeight = if (w == actualWeek) FontWeight.Bold else FontWeight.Normal)
+                            if (w == actualWeek || selected) Text(
+                                if (w == actualWeek) "本周" else "查看",
+                                style = MaterialTheme.typography.labelSmall, color = textColor,
+                            )
                         }
                     }
                 }
