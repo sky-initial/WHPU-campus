@@ -144,8 +144,8 @@ fun TodayScreen(
             // ②.5 快速入口（和非学习页同款的一行式）：
             LibraryEntryCard(
                 icon = Icons.Filled.LocalLibrary,
-                title = "图书馆 · 座位预约",
-                subtitle = "暂未接入",
+                title = "图书馆",
+                subtitle = "图书借阅 · 座位预约 · 官方网页",
                 onOpen = onOpenLibrary,
             )
 
@@ -153,7 +153,7 @@ fun TodayScreen(
             LibraryEntryCard(
                 icon = Icons.Filled.Bolt,
                 title = "宿舍电费",
-                subtitle = "暂未接入",
+                subtitle = "官方网页 · 部分楼栋入口暂不可用",
                 onOpen = onOpenElectricity,
             )
 
@@ -161,7 +161,7 @@ fun TodayScreen(
             LibraryEntryCard(
                 icon = Icons.Filled.MoreHoriz,
                 title = "校园卡",
-                subtitle = "暂未接入",
+                subtitle = "余额与账单 · 官方网页",
                 onOpen = onOpenCard,
             )
 

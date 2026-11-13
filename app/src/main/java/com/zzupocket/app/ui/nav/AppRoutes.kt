@@ -21,6 +21,7 @@ object AppRoutes {
     const val EXAMS = "exams"
     const val CURRENT_EXAMS = "current_exams"
     const val CARD = "campus_card"
+    const val SEAT = "library_seat"
 
     /**
      * 小组件带过来的路由 extra。
