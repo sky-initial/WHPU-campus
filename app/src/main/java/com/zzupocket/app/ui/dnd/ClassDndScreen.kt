@@ -1,6 +1,10 @@
 package com.zzupocket.app.ui.dnd
 
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.layout.*
@@ -14,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.dnd.ClassDndSettings
 import kotlinx.coroutines.launch
@@ -28,11 +33,23 @@ fun ClassDndScreen(onBack: () -> Unit) {
     val status by controller.status.collectAsStateWithLifecycle()
     var policyAccess by remember { mutableStateOf(controller.hasPolicyAccess()) }
     var exactAccess by remember { mutableStateOf(controller.hasExactAlarmAccess()) }
+    var systemFilter by remember { mutableIntStateOf(controller.systemInterruptionFilter()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(context, controller) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                systemFilter = controller.systemInterruptionFilter()
+            }
+        }
+        ContextCompat.registerReceiver(context, receiver,
+            IntentFilter(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         policyAccess = controller.hasPolicyAccess()
         exactAccess = controller.hasExactAlarmAccess()
+        systemFilter = controller.systemInterruptionFilter()
         scope.launch { controller.refresh() }
     }
     fun openSettings(action: String, packageUri: Boolean = false) {
@@ -60,6 +77,22 @@ fun ClassDndScreen(onBack: () -> Unit) {
                     })
             }
             Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val systemDndOn = systemFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY ||
+                systemFilter == NotificationManager.INTERRUPTION_FILTER_ALARMS ||
+                systemFilter == NotificationManager.INTERRUPTION_FILTER_NONE
+            Text(when {
+                systemDndOn -> "系统免打扰：已开启"
+                systemFilter == NotificationManager.INTERRUPTION_FILTER_ALL -> "系统免打扰：已关闭"
+                else -> "系统免打扰：暂时无法读取"
+            }, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!prefs.enabled && systemDndOn) {
+                Text("上课自动切换已关闭，系统免打扰仍开启。请在系统设置中查看正在生效的模式或规则。",
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            OutlinedButton(onClick = {
+                runCatching { context.startActivity(Intent("android.settings.ZEN_MODE_SETTINGS")) }
+                    .onFailure { openSettings(Settings.ACTION_SOUND_SETTINGS) }
+            }, modifier = Modifier.fillMaxWidth()) { Text("查看系统免打扰") }
             OutlinedButton(onClick = { openSettings(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS) }, modifier = Modifier.fillMaxWidth()) {
                 Text(if (policyAccess) "免打扰访问：已授权" else "授予免打扰访问")
             }
