@@ -31,6 +31,7 @@ class WhpuElectricityRepository(
     private val source: WhpuElectricitySource,
     private val session: WhpuCardSession,
     private val now: () -> Long = System::currentTimeMillis,
+    private val onOwnerVerified: suspend (WhpuCardOwner) -> Unit = {},
 ) {
     private val dao = db.kvCacheDao()
     private val refreshMutex = Mutex()
@@ -57,6 +58,7 @@ class WhpuElectricityRepository(
                     val target = key(room.owner)
                     dao.put(KvCacheEntity(target, Json.encodeToString(cache), reading.fetchedAt, 0))
                     dao.put(KvCacheEntity(ACTIVE_KEY, target, reading.fetchedAt, 0))
+                    onOwnerVerified(room.owner)
                     currentCoroutineContext().ensureActive()
                     if (!isCurrent()) throw WhpuElectricityException.SessionChanged()
                     cache
@@ -79,6 +81,11 @@ class WhpuElectricityRepository(
         val cache = dao.get(target)
         if (cache == null) dao.remove(ACTIVE_KEY)
         else dao.put(KvCacheEntity(ACTIVE_KEY, target, cache.fetchedAt, 0))
+    }
+
+    suspend fun acceptOwner(owner: WhpuCardOwner) = db.withTransaction {
+        activateOwner(owner)
+        onOwnerVerified(owner)
     }
 
     suspend fun deactivate() = dao.remove(ACTIVE_KEY)

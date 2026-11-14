@@ -4,6 +4,8 @@ import androidx.room.withTransaction
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.data.whpu.totals
+import com.zzupocket.app.data.whpu.WhpuElectricityReading
+import com.zzupocket.app.data.whpu.cardMoney
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 
@@ -53,7 +55,7 @@ data class WidgetScheduleBundle(
     )
 }
 
-/** 当前 WHPU 账号和卡片的本地快照；电费目前通过官方页面查询。 */
+/** Current campus-card and selected electricity-room caches. No network requests. */
 data class WidgetBalanceBundle(
     val cardYuan: Double?,
     val cardAt: Long?,
@@ -61,17 +63,30 @@ data class WidgetBalanceBundle(
     val cardWeekSpend: Double?,
     val cardWeekCount: Int?,
     val nowMillis: Long,
+    val electricity: WhpuElectricityReading? = null,
 ) {
-    fun plan(): WidgetBalancePlan = WidgetBalance.build(
-        roomLabel = "",
-        lightKwh = null, acKwh = null,
-        lightAvgDaily = 0.0, acAvgDaily = 0.0,
-        lightAt = null, acAt = null,
-        cardYuan = cardYuan, cardAt = cardAt,
-        cardTodaySpend = cardTodaySpend, cardWeekSpend = cardWeekSpend,
-        cardWeekCount = cardWeekCount, nowMillis = nowMillis,
-        electricityAvailable = false,
-    )
+    fun plan(): WidgetBalancePlan {
+        val cardPlan = WidgetBalance.build(
+            roomLabel = "",
+            lightKwh = null, acKwh = null,
+            lightAvgDaily = 0.0, acAvgDaily = 0.0,
+            lightAt = null, acAt = null,
+            cardYuan = cardYuan, cardAt = cardAt,
+            cardTodaySpend = cardTodaySpend, cardWeekSpend = cardWeekSpend,
+            cardWeekCount = cardWeekCount, nowMillis = nowMillis,
+            electricityAvailable = false,
+        )
+        val reading = electricity
+        return cardPlan.copy(
+            update = WidgetBalance.updateLabel(listOfNotNull(cardAt, reading?.fetchedAt).minOrNull(), nowMillis),
+            leftBlocks = listOf(
+                WidgetBlock("电费余额", reading?.let { cardMoney(it.balanceFen) } ?: "未查询",
+                    if (reading == null) "" else "元", "", reading != null && reading.balanceFen < 0),
+                WidgetBlock(if (reading == null) "选择房间" else "所选房间", "打开", "",
+                    reading?.room?.steps?.lastOrNull()?.option?.name.orEmpty(), false),
+            ),
+        )
+    }
 }
 
 /**
@@ -132,18 +147,19 @@ object WidgetData {
         }
     }
 
-    /** 只读当前 WHPU 账号/卡缓存，不读取原项目的电费房间和采样。 */
-    suspend fun loadBalance(): WidgetBalanceBundle {
+    /** Read both campus-service pointers in one transaction; never use old energy samples. */
+    suspend fun loadBalance(): WidgetBalanceBundle = AppGraph.db.withTransaction {
         val nowMillis = System.currentTimeMillis()
         val cache = AppGraph.whpuCardRepository.current()
         val totals = cache?.totals()
-        return WidgetBalanceBundle(
+        WidgetBalanceBundle(
             cardYuan = cache?.selectedCard?.balanceFen?.div(100.0),
             cardAt = cache?.selectedCard?.let { cache.fetchedAt },
             cardTodaySpend = totals?.todaySpendFen?.div(100.0),
             cardWeekSpend = totals?.weekSpendFen?.div(100.0),
             cardWeekCount = totals?.weekCount,
             nowMillis = nowMillis,
+            electricity = AppGraph.whpuElectricityRepository.current()?.selected,
         )
     }
 }

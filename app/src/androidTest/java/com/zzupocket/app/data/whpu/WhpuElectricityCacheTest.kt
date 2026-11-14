@@ -155,4 +155,21 @@ class WhpuElectricityCacheTest {
         repo().refresh(room()); repo().clear(ownerA)
         assertEquals(listOf(legacy), db.energyDao().all())
     }
+
+    @Test fun sharedCampusOwnerSwitchesCardAndElectricityPointersTogether() = runBlocking {
+        var cardOwner = ownerA
+        lateinit var electricity: WhpuElectricityRepository
+        val card = WhpuCardRepository(db, WhpuCardSource {
+            WhpuCardSnapshot(session.currentRevision(), cardOwner, emptyList(), emptyList())
+        }, session, onOwnerVerified = { electricity.activateOwner(it) })
+        electricity = WhpuElectricityRepository(db, WhpuElectricitySource {
+            WhpuElectricitySnapshot(session.currentRevision(), it, 1234L)
+        }, session, onOwnerVerified = { card.activateOwner(it) })
+        card.refresh(); val first = electricity.refresh(room())
+        cardOwner = ownerB; card.refresh()
+        assertNull(electricity.current()); assertEquals(first, electricity.cached(ownerA))
+        electricity.refresh(room(ownerB)); assertEquals(ownerB, card.current()!!.owner)
+        electricity.acceptOwner(ownerA)
+        assertEquals(ownerA, card.current()!!.owner); assertEquals(first, electricity.current())
+    }
 }

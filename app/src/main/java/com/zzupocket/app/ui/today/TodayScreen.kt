@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,11 +80,11 @@ fun TodayScreen(
     onOpenElectricity: () -> Unit,
     onOpenCard: () -> Unit,
     onOpenLibrary: () -> Unit = {},
-    vm: TodayViewModel = viewModel(),
     timelineVm: TodayTimelineViewModel = viewModel(),
     cardVm: TodayCardViewModel = viewModel(),
 ) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val electricity by remember { AppGraph.whpuElectricityRepository.observeCurrent() }
+        .collectAsStateWithLifecycle(initialValue = null)
     val timeline by timelineVm.state.collectAsStateWithLifecycle()
     val card by cardVm.state.collectAsStateWithLifecycle()
     val semesters by AppGraph.scheduleRepository.observeSemesters().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -93,7 +94,6 @@ fun TodayScreen(
     // 少了这一步，登录成功回到「今天」仍会显示"未登录"——因为 ViewModel 不会重建。
     // 时间轴和校园卡也要重算：刚在专注页记完一笔，回到这里就该看到。
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        vm.onResume()
         timelineVm.reload()
         cardVm.reload()
     }
@@ -149,13 +149,20 @@ fun TodayScreen(
                 onOpen = onOpenLibrary,
             )
 
-            // ③ 宿舍电量（底部带"近 7 天"摘要行，完整的趋势图在电费页）
-            LibraryEntryCard(
-                icon = Icons.Filled.Bolt,
-                title = "宿舍电费",
-                subtitle = "官方网页 · 服务异常时稍后重试",
-                onOpen = onOpenElectricity,
-            )
+            // Read the same selected room and timestamp as the native page and widget.
+            Card(onClick = onOpenElectricity, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("宿舍电费", style = MaterialTheme.typography.titleMedium)
+                    val reading = electricity?.selected
+                    if (reading == null) Text("选择房间后查询余额 · 官方网页可用")
+                    else {
+                        Text(reading.room.label, style = MaterialTheme.typography.bodyMedium)
+                        Text("¥ ${com.zzupocket.app.data.whpu.cardMoney(reading.balanceFen)}", style = MaterialTheme.typography.headlineSmall)
+                        Text("本地缓存 · 更新于 ${com.zzupocket.app.data.whpu.cardDateTime(reading.fetchedAt)}",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
 
             // 校园卡只显示当前选中卡的离线快照。
             TodayCardBalanceCard(state = card, onOpen = onOpenCard)

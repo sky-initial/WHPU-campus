@@ -37,6 +37,7 @@ class WhpuCardRepository(
     private val source: WhpuCardSource,
     private val session: WhpuCardSession,
     private val now: () -> Long = System::currentTimeMillis,
+    private val onOwnerVerified: suspend (WhpuCardOwner) -> Unit = {},
 ) {
     private val dao = db.kvCacheDao()
     private val refreshMutex = Mutex()
@@ -62,6 +63,7 @@ class WhpuCardRepository(
                 val target = key(cache.owner)
                 dao.put(KvCacheEntity(target, Json.encodeToString(cache), cache.fetchedAt, 0))
                 dao.put(KvCacheEntity(ACTIVE_KEY, target, cache.fetchedAt, 0))
+                onOwnerVerified(cache.owner)
                 currentCoroutineContext().ensureActive()
                 if (!isCurrent()) throw WhpuCardException.SessionChanged()
                 cache
@@ -79,6 +81,14 @@ class WhpuCardRepository(
 
     /** Hide the old account during an explicit login switch; retain its offline snapshot. */
     suspend fun deactivate() = dao.remove(ACTIVE_KEY)
+
+    /** Select only this authenticated owner's offline data, or hide the previous owner. */
+    suspend fun activateOwner(owner: WhpuCardOwner) = db.withTransaction {
+        val target = key(owner)
+        val cache = dao.get(target)
+        if (cache == null) dao.remove(ACTIVE_KEY)
+        else dao.put(KvCacheEntity(ACTIVE_KEY, target, cache.fetchedAt, 0))
+    }
 
     suspend fun clear(owner: WhpuCardOwner) = db.withTransaction {
         val target = key(owner)
