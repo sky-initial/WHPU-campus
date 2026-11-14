@@ -33,7 +33,7 @@
     android:minResizeWidth="250dp"
     android:minWidth="340dp"
     android:previewImage="@drawable/widget_preview_energy_card"
-    android:previewLayout="@layout/widget_energy_card_preview"
+    android:previewLayout="@layout/widget_energy_card"
     android:resizeMode="horizontal"
     android:targetCellHeight="2"
     android:targetCellWidth="4"

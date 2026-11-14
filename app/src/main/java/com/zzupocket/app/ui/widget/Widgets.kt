@@ -70,7 +70,7 @@ object Widgets {
             }
 
             if (balanceIds.isNotEmpty()) {
-                runCatching { WidgetData.loadBalance(prefs) }
+                runCatching { WidgetData.loadBalance() }
                     .onSuccess { EnergyCardWidget.render(appContext, mgr, balanceIds, it, prefs) }
                     .onFailure { Log.w(TAG, "读取电量/余额失败，本轮不刷新该组件", it) }
             }

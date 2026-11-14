@@ -1,8 +1,8 @@
 package com.zzupocket.app.ui.widget
 
+import com.zzupocket.app.data.whpu.WhpuCalendar
 import com.zzupocket.app.domain.EnergyStats
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -52,25 +52,7 @@ data class WidgetBalancePlan(
     val rightBlocks: List<WidgetBlock>,
 )
 
-/**
- * 「电量 + 校园卡余额」组件的判断逻辑，纯函数（可单测）。
- *
- * ## 为什么是"左右两半 + 块"
- * 之前是"三行指标、数字右对齐占满整宽"。那个版面在**真实画布**（实测 342×195dp）里
- * 上部挤、下部空 —— 因为它是按官方老公式的 110dp 高度排的。
- * 现在改成左右两半、每半两个块：每块高度能吃到 ~68dp，数字可以放到 28~30dp，
- * 底部不再留空，而且**点击区变成两块大区域**（左半 → 电费页、右半 → 校园卡页），
- * 不再是那条 28dp 的窄条。
- *
- * ## 数字为什么独占一行
- * 上一版把数字和表计名挤在同一行，余额一到 `1288.5` 就被截断。
- * 现在数字在块里独占一行，列宽 ~148dp 放得下 `-1234.56 度`。
- *
- * ## 数据从哪来
- * 全部本地：电表余额与用量采样在 Room，校园卡余额是上次查到后存的缓存
- * （当前 WHPU 账号/卡快照），今日/本周消费来自本地流水。组件**自己不打任何接口**，
- * 所以数字可能不新 —— 右上角如实标注更新时刻（取三份数据里**最旧**的那份，宁可保守）。
- */
+/** 小组件内容的纯函数映射。WHPU 电费未接入时只展示官方网页入口。 */
 object WidgetBalance {
 
     /** 校园卡余额低于这个数就标红：一顿饭的钱，低于它基本没法在食堂吃了 */
@@ -133,7 +115,7 @@ object WidgetBalance {
      * 取三份数据里**最旧**的那份 —— 报最新的一份会让用户以为整块都是新的，
      * 而校园卡余额可能已经是前天的了。宁可保守。
      */
-    fun updateLabel(oldestAt: Long?, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    fun updateLabel(oldestAt: Long?, nowMillis: Long, zone: ZoneId = WhpuCalendar.zone): String {
         if (oldestAt == null || oldestAt <= 0L) return "打开 App 更新"
         val then = Instant.ofEpochMilli(oldestAt).atZone(zone)
         // 「今天」也从 nowMillis 推，而不是 LocalDate.now()：这样这个函数是纯的（可单测），
@@ -181,15 +163,25 @@ object WidgetBalance {
          * 否则第二格会残留上一次的文字。
          */
         singleMeter: Boolean = false,
+        electricityAvailable: Boolean = false,
     ): WidgetBalancePlan {
         val hasRoom = roomLabel.isNotBlank() || lightKwh != null || acKwh != null
-        val leftTitle = if (roomLabel.isNotBlank()) "宿舍电量 · $roomLabel" else "宿舍电量"
+        val leftTitle = when {
+            !electricityAvailable -> "宿舍电费"
+            roomLabel.isNotBlank() -> "宿舍电量 · $roomLabel"
+            else -> "宿舍电量"
+        }
 
         // 单表计时用有值的那一路（亿达填的是照明那一路）
         val onlyKwh = lightKwh ?: acKwh
         val onlyAvg = if (lightKwh != null) lightAvgDaily else acAvgDaily
 
-        val leftBlocks = if (singleMeter) {
+        val leftBlocks = if (!electricityAvailable) {
+            listOf(
+                WidgetBlock("电费查询", "待接入", "", "", false),
+                WidgetBlock("官方网页", "打开", "", "", false),
+            )
+        } else if (singleMeter) {
             listOf(
                 WidgetBlock(
                     label = "电量",
@@ -239,6 +231,7 @@ object WidgetBalance {
         )
 
         val update = when {
+            !electricityAvailable -> updateLabel(cardAt, nowMillis)
             !hasRoom && cardAt == null -> "没设置房间"
             else -> updateLabel(listOfNotNull(lightAt, acAt, cardAt).minOrNull(), nowMillis)
         }
