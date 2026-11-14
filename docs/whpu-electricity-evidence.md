@@ -37,7 +37,7 @@ Android 官方说明，加载过程中修改 User-Agent 会触发重新加载，
 
 ### 请求与目录
 
-实际观察的目录和房间查询均为 `POST https://ecardapp.whpu.edu.cn/charge/feeitem/getThirdData`，`Content-Type: application/x-www-form-urlencoded`。学校前端带 `Authorization` 与 `synjones-auth` 请求头；仅确认头名称，尚未验证原生请求所需的最小认证集合。另观察到配置查询 `GET /charge/feeitem/singleFeeitem?feeitemid=...`，不能从配置字段名称直接推断金额单位。
+实际观察的目录和房间查询均为 `POST https://ecardapp.whpu.edu.cn/charge/feeitem/getThirdData`，`Content-Type: application/x-www-form-urlencoded`。学校前端带 `Authorization` 与 `synjones-auth` 请求头。另观察到配置查询 `GET /charge/feeitem/singleFeeitem?feeitemid=...`，不能从配置字段名称直接推断金额单位。“其他楼栋”实际收费项目 ID 为公开目录编号 `182`，查询页标题为“常青校区，金银湖校区”。
 
 目录请求参数为 `feeitemid`、`type=select`、`level`，加上此前已选层级的 `code=value`。初始 `level=0`；选第一层后为 `1`，依次递增。HTTP 200、业务 `code=200` 的成功目录包含 `map.total[]`（`code`、`level`、`name`）与 `map.data[]`（`name`、`value`）。本次未见分页字段，但未把这一现象推定为所有接口均无分页。
 
@@ -63,9 +63,14 @@ Android 官方说明，加载过程中修改 User-Agent 会触发重新加载，
 
 核验期间空调房间标签多出楼栋前缀，首次选择未匹配后，连续脚本仍执行了默认项确认；该次结果未保存数值、不计为授权房间验收。随后改为选择成功后单独执行确认，精确匹配用户指定房间，并在内存中核对匹配结果、页面显示与未绑定状态。后续自动化须在选择失败时停止，不能继续确认默认选项。
 
+### 认证与项目目录补查
+
+- 最小认证核验：官方公开前端以自身状态中的 token 组装 bearer 请求头；在浏览器内比较，该状态与现有校园卡交接来源相同，只输出相等结果。对同一公共目录请求，不带任何认证和 Cookie 时返回 HTTP 200、业务 `code=401,success=false`；只带现有 `synjones-auth` bearer 头、不带 Cookie 或额外 Authorization 头时返回 HTTP 200、`code=200,map` 和完整初始目录。没有读取到本地、打印或保存令牌，也没有清除页面登录态。该结果支持复用校园卡会话，原生端仍须实测；无凭据响应不替代自然过期验收。
+- 官方公开前端存在 `/feeitem/showFeeitem` 方法，但本次通过其客户端调用进入错误回调，未取得项目列表；不将代码中出现的路径记为已验证可用目录。三个分组仍以实际门户菜单为依据。
+
 ### 尚未完成
 
-- 原生请求认证、自然失效、业务错误和有效空结果的区分。
+- 原生请求认证实测、自然失效、业务错误和有效空结果的区分。
 - 其他分组的真实房间响应及单位。
 - 房间选择、账号与计费项分区缓存、失败保留、今日页和只读组件接入。
 - 当前仅完成网页和接口证据核验；没有启用旧郑大电费客户端或后台采样。
