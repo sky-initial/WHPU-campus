@@ -5,14 +5,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WhpuCampusServiceTest {
-    @Test fun desktopPortalKeepsInstalledEngineVersion() {
+    @Test fun mobilePortalKeepsAndroidAndInstalledEngineVersion() {
         val mobile = "Mozilla/5.0 (Linux; Android 16; Device Build/TEST; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/154.0.8037.106 Mobile Safari/537.36"
-        val desktop = portalDesktopUserAgent(mobile)
-        assertTrue(desktop.contains("Chrome/154.0.8037.106"))
-        assertTrue(desktop.contains("(X11; Linux x86_64)"))
-        assertFalse(desktop.contains("Android"))
-        assertFalse(desktop.contains("Mobile"))
-        assertFalse(desktop.contains("Version/4.0"))
+        val browser = campusMobileUserAgent(mobile)
+        assertTrue(browser.contains("Chrome/154.0.8037.106"))
+        assertTrue(browser.contains("Android 16"))
+        assertTrue(browser.contains("Mobile Safari/537.36"))
+        assertFalse(browser.contains("X11"))
+        assertFalse(browser.contains("; wv"))
+        assertFalse(browser.contains("Version/4.0"))
+        assertEquals(browser, campusMobileUserAgent(browser))
+    }
+    @Test fun tabletUsesMobileCardRoutingWithoutChangingItsEngineVersion() {
+        val tablet = "Mozilla/5.0 (Linux; Android 16; Tablet; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/154.0.8037.106 Safari/537.36"
+        val browser = campusMobileUserAgent(tablet)
+        assertTrue(browser.contains("Android 16; Tablet"))
+        assertTrue(browser.contains("Chrome/154.0.8037.106 Mobile Safari/537.36"))
+        assertEquals(browser, campusMobileUserAgent(browser))
     }
     @Test fun entriesAreAllowedAndContainNoSessionOrFixedDate() {
         WhpuCampusService.entries.forEach { service ->
