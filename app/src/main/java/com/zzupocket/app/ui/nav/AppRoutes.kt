@@ -21,6 +21,7 @@ object AppRoutes {
     const val EXAMS = "exams"
     const val CURRENT_EXAMS = "current_exams"
     const val CARD = "campus_card"
+    const val CARD_WEB = "campus_card_web"
     const val SEAT = "library_seat"
 
     /**

@@ -157,13 +157,8 @@ fun TodayScreen(
                 onOpen = onOpenElectricity,
             )
 
-            // ④ 校园卡：余额 + 今日消费
-            LibraryEntryCard(
-                icon = Icons.Filled.MoreHoriz,
-                title = "校园卡",
-                subtitle = "余额与账单 · 官方网页",
-                onOpen = onOpenCard,
-            )
+            // 校园卡只显示当前选中卡的离线快照。
+            TodayCardBalanceCard(state = card, onOpen = onOpenCard)
 
             Spacer(Modifier.height(4.dp))
         }

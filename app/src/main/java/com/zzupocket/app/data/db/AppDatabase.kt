@@ -101,6 +101,13 @@ interface AppSettingsDao {
 @Dao
 interface KvCacheDao {
 
+    /** Read an active snapshot and its pointer in one Room query, without mixed account emissions. */
+    @Query("SELECT target.* FROM kv_cache AS target INNER JOIN kv_cache AS pointer ON target.key = pointer.payload WHERE pointer.key = :pointerKey")
+    fun observeLinked(pointerKey: String): Flow<KvCacheEntity?>
+
+    @Query("SELECT target.* FROM kv_cache AS target INNER JOIN kv_cache AS pointer ON target.key = pointer.payload WHERE pointer.key = :pointerKey")
+    suspend fun getLinked(pointerKey: String): KvCacheEntity?
+
     @Query("SELECT * FROM kv_cache WHERE key = :key")
     fun observe(key: String): Flow<KvCacheEntity?>
 

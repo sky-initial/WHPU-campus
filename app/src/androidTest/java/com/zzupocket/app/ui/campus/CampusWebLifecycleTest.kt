@@ -4,11 +4,13 @@ import android.content.Intent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.zzupocket.app.MainActivity
-import com.zzupocket.app.data.whpu.SEAT_ENTRY
 import com.zzupocket.app.ui.nav.AppRoutes
 import org.junit.Assert.*
 import org.junit.Test
@@ -37,10 +39,21 @@ class CampusWebLifecycleTest {
                 ready
             }
             scenario.onActivity {
-                original!!.stopLoading()
-                original!!.loadDataWithBaseURL(SEAT_ENTRY,
-                    "<html><head><title>lifecycle-fixture</title><style>#campus-fixture{height:100vh;overflow:hidden}</style></head><body><div id='campus-fixture'>synthetic</div></body></html>",
-                    "text/html", "UTF-8", SEAT_ENTRY)
+                val view = original!!
+                view.stopLoading()
+                val delegate = view.webViewClient
+                val fixtureUrl = "https://office.chaoxing.com/front/third/apps/seat/lifecycle-fixture"
+                val html = "<html><head><title>lifecycle-fixture</title><style>#campus-fixture{height:100vh;overflow:hidden}</style></head><body><div id='campus-fixture'>synthetic</div></body></html>"
+                // loadDataWithBaseURL can report a non-origin URL on API 31. Exercise the
+                // production origin/navigation checks with a real URL and local-only responses.
+                view.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest) =
+                        WebResourceResponse("text/html", "UTF-8", (if (request.url.toString() == fixtureUrl) html else "").byteInputStream())
+                    override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) = delegate.onPageStarted(view, url, favicon)
+                    override fun onPageFinished(view: WebView, url: String) = delegate.onPageFinished(view, url)
+                    override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) = delegate.doUpdateVisitedHistory(view, url, isReload)
+                }
+                view.loadUrl(fixtureUrl)
             }
             await {
                 var loaded = false
@@ -48,7 +61,10 @@ class CampusWebLifecycleTest {
                 loaded
             }
             val contentHeight = AtomicInteger()
-            await {
+            await(onTimeout = {
+                "Synthetic viewport: " + evaluate(scenario, original!!,
+                    "JSON.stringify({fixture:!!document.getElementById('campus-fixture'),height:document.getElementById('campus-fixture')?.getBoundingClientRect().height,innerHeight:innerHeight,ready:document.readyState})")
+            }) {
                 scenario.onActivity {
                     original!!.evaluateJavascript("document.getElementById('campus-fixture').getBoundingClientRect().height") {
                         contentHeight.set(it.toDoubleOrNull()?.toInt() ?: 0)
@@ -203,11 +219,11 @@ class CampusWebLifecycleTest {
         return null
     }
 
-    private fun await(predicate: () -> Boolean) {
+    private fun await(onTimeout: () -> String = { "页面未在超时前就绪" }, predicate: () -> Boolean) {
         repeat(100) {
             if (predicate()) return
             Thread.sleep(100)
         }
-        fail("页面未在超时前就绪")
+        fail(onTimeout())
     }
 }

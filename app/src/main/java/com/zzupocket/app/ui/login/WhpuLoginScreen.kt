@@ -151,13 +151,16 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
             webView?.stopLoading()
             AppGraph.whpuSessionManager.clear()
             imported = false
-            WebStorage.getInstance().deleteAllData()
-            CookieManager.getInstance().removeAllCookies {
-                CookieManager.getInstance().flush()
-                webView?.clearHistory()
-                webView?.loadUrl(WhpuWebPolicy.LOGIN)
-                busy = false
-                message = "已清除应用内全部网页登录状态，本地缓存保留。"
+            scope.launch {
+                AppGraph.whpuCardSession.clear()
+                WebStorage.getInstance().deleteAllData()
+                CookieManager.getInstance().removeAllCookies {
+                    CookieManager.getInstance().flush()
+                    webView?.clearHistory()
+                    webView?.loadUrl(WhpuWebPolicy.LOGIN)
+                    busy = false
+                    message = "已清除应用内全部网页登录状态，本地缓存保留。"
+                }
             }
         }) { Text("清除登录状态") } },
     )
@@ -199,6 +202,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
             }
             AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = { ctx ->
                 WebView(ctx).apply {
+                    webChromeClient = com.zzupocket.app.ui.web.SchoolWebChromeClient()
                     setBackgroundColor(android.graphics.Color.WHITE)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true

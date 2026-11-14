@@ -173,6 +173,13 @@ object AppGraph {
 
     val focusRepository: FocusRepository by lazy { FocusRepository(db) }
 
+    val whpuCardSession by lazy { com.zzupocket.app.data.whpu.WhpuCardSession() }
+    val whpuCardProvider by lazy { com.zzupocket.app.data.whpu.WhpuCardProvider(whpuCardSession) }
+    val whpuCardRepository by lazy {
+        com.zzupocket.app.data.whpu.WhpuCardRepository(db,
+            com.zzupocket.app.data.whpu.WhpuCardSource { whpuCardProvider.fetch() }, whpuCardSession)
+    }
+
     val cardRepository: CardRepository by lazy {
         CardRepository(db, ecardClient, authRepository)
     }
