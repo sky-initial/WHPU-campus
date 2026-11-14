@@ -175,9 +175,16 @@ object AppGraph {
 
     val whpuCardSession by lazy { com.zzupocket.app.data.whpu.WhpuCardSession() }
     val whpuCardProvider by lazy { com.zzupocket.app.data.whpu.WhpuCardProvider(whpuCardSession) }
-    val whpuCardRepository by lazy {
+    val whpuCardRepository: com.zzupocket.app.data.whpu.WhpuCardRepository by lazy {
         com.zzupocket.app.data.whpu.WhpuCardRepository(db,
-            com.zzupocket.app.data.whpu.WhpuCardSource { whpuCardProvider.fetch() }, whpuCardSession)
+            com.zzupocket.app.data.whpu.WhpuCardSource { whpuCardProvider.fetch() }, whpuCardSession,
+            onOwnerVerified = { whpuElectricityRepository.activateOwner(it) })
+    }
+    val whpuElectricityProvider by lazy { com.zzupocket.app.data.whpu.WhpuElectricityProvider(whpuCardSession) }
+    val whpuElectricityRepository: com.zzupocket.app.data.whpu.WhpuElectricityRepository by lazy {
+        com.zzupocket.app.data.whpu.WhpuElectricityRepository(db,
+            com.zzupocket.app.data.whpu.WhpuElectricitySource { whpuElectricityProvider.balance(it) }, whpuCardSession,
+            onOwnerVerified = { whpuCardRepository.activateOwner(it) })
     }
 
     val cardRepository: CardRepository by lazy {

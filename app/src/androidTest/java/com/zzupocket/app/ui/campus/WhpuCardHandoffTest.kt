@@ -22,13 +22,16 @@ import org.junit.runner.RunWith
 /** An isolated synthetic WebView; network loads are blocked and no provider is invoked. */
 @RunWith(AndroidJUnit4::class)
 class WhpuCardHandoffTest {
-    @Test fun officialOriginCallbackReadsInMemoryAndRejectsStaleNavigation() = runBlocking {
+    @Test fun officialOriginCallbackReadsInMemoryAndRejectsStaleNavigation() = verify(WhpuCampusService.CARD)
+    @Test fun electricityReusesOriginAndNavigationCheckedHandoff() = verify(WhpuCampusService.ELECTRICITY)
+
+    private fun verify(service: WhpuCampusService) = runBlocking {
         val store = ViewModelStore()
         var model: CampusWebViewModel? = null
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             try {
                 scenario.onActivity { activity ->
-                    val current = CampusWebViewModel(activity, WhpuCampusService.CARD)
+                    val current = CampusWebViewModel(activity, service)
                     model = current; store.put("fixture", current)
                     current.webView.settings.blockNetworkLoads = true
                     assertTrue(current.webView.webChromeClient!!.onConsoleMessage(android.webkit.ConsoleMessage(

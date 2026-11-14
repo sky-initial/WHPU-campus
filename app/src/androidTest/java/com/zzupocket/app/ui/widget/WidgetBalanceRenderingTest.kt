@@ -34,7 +34,7 @@ class WidgetBalanceRenderingTest {
                         Widgets.openApp(context, AppRoutes.TODAY), 165)
                     val view = rv.apply(context, null)
                     layout(view, width, 165)
-                    for ((id, expected) in listOf(R.id.value_1 to "待接入", R.id.value_2 to "打开")) {
+                    for ((id, expected) in listOf(R.id.value_1 to "未查询", R.id.value_2 to "打开")) {
                         val text = view.findViewById<TextView>(id)
                         assertEquals(expected, text.text.toString())
                         assertTrue("status must fit horizontally", text.paint.measureText(expected) <= text.width)
@@ -57,8 +57,8 @@ class WidgetBalanceRenderingTest {
             layout(view, 340, 195)
             val texts = textViews(view).map { it.text.toString() }
             assertTrue(texts.contains("预览 · 示例数据"))
-            assertTrue(texts.contains("待接入"))
-            assertTrue(texts.contains("官方网页"))
+            assertTrue(texts.contains("未查询"))
+            assertTrue(texts.contains("选择房间"))
             val todayHint = view.findViewById<TextView>(R.id.hint_3)
             assertTrue(todayHint.paint.measureText(todayHint.text.toString()) <= todayHint.width)
             assertFalse(texts.any { it.contains("照明") || it.contains("空调") || it.contains("度") || it.contains("可用约") })
@@ -69,6 +69,37 @@ class WidgetBalanceRenderingTest {
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
                 }
                 bitmap.recycle()
+            }
+        }
+    }
+
+    @Test fun electricityCurrencyFitsRemoteViewsInBothThemes() {
+        val room = com.zzupocket.app.data.whpu.WhpuElectricityRoom(
+            com.zzupocket.app.data.whpu.WhpuCardOwner("101"), "182",
+            listOf(com.zzupocket.app.data.whpu.WhpuElectricityStep(
+                com.zzupocket.app.data.whpu.WhpuElectricityLevel("room", "房间", 4),
+                com.zzupocket.app.data.whpu.WhpuElectricityOption("示例房间", "1&示例房间"))),
+        )
+        instrumentation.runOnMainSync {
+            for (mode in listOf(DarkMode.LIGHT, DarkMode.DARK)) {
+                for (width in listOf(250, 340)) {
+                    val colors = WidgetStyle.colors(context, UiPrefs(darkMode = mode))
+                    val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room, -123L, 0L)
+                    val plan = WidgetBalanceBundle(null, null, null, null, null, 0L, reading).plan()
+                    val view = EnergyCardWidget.build(context, plan, colors,
+                        Widgets.openApp(context, AppRoutes.ELECTRICITY),
+                        Widgets.openApp(context, AppRoutes.CARD),
+                        Widgets.openApp(context, AppRoutes.TODAY), 165).apply(context, null)
+                    layout(view, width, 165)
+                    val value = view.findViewById<TextView>(R.id.value_1)
+                    assertEquals("-1.23", value.text.toString())
+                    assertTrue(value.paint.measureText(value.text.toString()) <= value.width)
+                    assertTrue(value.height >= value.layout.height)
+                    assertNotEquals(colors.bg, value.currentTextColor)
+                    assertEquals("元", view.findViewById<TextView>(R.id.unit_1).text.toString())
+                    assertEquals("示例房间", view.findViewById<TextView>(R.id.hint_2).text.toString())
+                    assertFalse(textViews(view).any { it.text.contains("度") || it.text.contains("可用约") })
+                }
             }
         }
     }

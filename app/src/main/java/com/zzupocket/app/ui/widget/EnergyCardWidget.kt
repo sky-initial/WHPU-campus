@@ -16,8 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * 左侧打开官方电费页；右侧显示当前 WHPU 校园卡缓存并打开原生查询页。
- * 电费原生查询待接入，不显示旧项目电表读数。组件只读缓存，不发起网络请求。
+ * 左侧显示所选房间的人民币余额，右侧显示当前校园卡缓存；点击进入相应原生页。
+ * 组件只读缓存，不发起网络请求，不读取旧项目电量或推算剩余天数。
  */
 class EnergyCardWidget : AppWidgetProvider() {
 
@@ -51,7 +51,7 @@ class EnergyCardWidget : AppWidgetProvider() {
                 val prefs = WidgetData.prefs()
                 render(ctx, mgr, ids, WidgetData.loadBalance(), prefs)
             } catch (t: Throwable) {
-                Log.w(TAG, "刷新「电量与校园卡」失败", t)
+                Log.w(TAG, "刷新余额组件失败")
             } finally {
                 pending.finish()
             }

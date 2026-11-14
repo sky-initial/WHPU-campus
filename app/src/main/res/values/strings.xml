@@ -9,10 +9,10 @@
     <string name="widget_next_class_desc">下一节课：课名、完整时间段、地点，右上角还有几节要上</string>
     <string name="widget_today_classes">今明课表</string>
     <string name="widget_today_classes_desc">左边今天、右边明天，各列出两节课：课名、地点、时间段</string>
-    <string name="widget_energy_card">电量与校园卡</string>
-    <string name="widget_electricity_query">电费查询</string>
-    <string name="widget_electricity_web">官方网页</string>
-    <string name="widget_energy_card_desc">左侧打开官方电费网页，右侧显示已同步的校园卡余额与本周消费</string>
+    <string name="widget_energy_card">电费与校园卡</string>
+    <string name="widget_electricity_query">电费余额</string>
+    <string name="widget_electricity_web">选择房间</string>
+    <string name="widget_energy_card_desc">左侧显示所选房间电费余额，右侧显示校园卡余额与本周消费；点击进入查询页</string>
 
     <!-- 固定文案（运行期会在 Kotlin 里替换成真实内容） -->
     <string name="widget_loading">正在读取…</string>
@@ -56,7 +56,7 @@
     <string name="widget_preview_next_place">南3 101</string>
     <string name="widget_preview_balance_header">宿舍电费</string>
     <string name="widget_preview_balance_update">预览 · 示例数据</string>
-    <string name="widget_preview_balance_light">待接入</string>
+    <string name="widget_preview_balance_light">未查询</string>
     <string name="widget_preview_balance_ac">打开</string>
     <string name="widget_preview_balance_card">36.50</string>
     <string name="widget_preview_balance_week">87.60</string>

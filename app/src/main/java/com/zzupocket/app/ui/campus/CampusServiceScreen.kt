@@ -150,7 +150,9 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
     fun home() { beginNavigation(); webView.loadUrl(service.entry) }
     fun back() { beginNavigation(); webView.goBack() }
     fun consumeCardSaved() { cardSaved = false }
-    fun syncCard() {
+    fun syncCard() = syncCampus(forElectricity = false)
+    fun signInElectricity() = syncCampus(forElectricity = true)
+    private fun syncCampus(forElectricity: Boolean) {
         if (cardSyncing || !cardReady) return
         cardSyncing = true
         cardMessage = null
@@ -163,16 +165,24 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
                 AppGraph.whpuCardSession.accept(credentials.token, credentials.type, webView.settings.userAgentString,
                     expectedRevision = revision, isCurrent = { !cleared && generation == navigationRevision })
                 revision = AppGraph.whpuCardSession.currentRevision()
-                AppGraph.whpuCardRepository.refresh { !cleared && generation == navigationRevision }
+                val owner = if (forElectricity) AppGraph.whpuElectricityProvider.directory().owner
+                    else AppGraph.whpuCardRepository.refresh { !cleared && generation == navigationRevision }.owner
+                AppGraph.whpuCardSession.withCurrent(revision) {
+                    if (cleared || generation != navigationRevision) throw WhpuCardException.SessionChanged()
+                    AppGraph.whpuElectricityRepository.acceptOwner(owner)
+                }
                 try { com.zzupocket.app.ui.widget.Widgets.refreshAll(appContext)
                 } catch (e: CancellationException) { throw e
-                } catch (_: Exception) { cardMessage = "已保存校园卡，桌面组件稍后更新。" }
+                } catch (_: Exception) { cardMessage = "校园服务已同步，桌面组件稍后更新。" }
                 cardSaved = true
             } catch (e: CancellationException) { throw e
             } catch (e: WhpuCardException) {
                 if (e is WhpuCardException.SessionExpired) AppGraph.whpuCardSession.clearIfCurrent(revision)
                 cardMessage = e.message
-            } catch (_: Exception) { cardMessage = "校园卡同步失败，请重试。本地缓存保留。"
+            } catch (e: WhpuElectricityException) {
+                if (e is WhpuElectricityException.SessionExpired) AppGraph.whpuCardSession.clearIfCurrent(revision)
+                cardMessage = e.message
+            } catch (_: Exception) { cardMessage = "校园服务同步失败，请重试。本地缓存保留。"
             } finally { cardSyncing = false }
         }
     }
@@ -213,14 +223,15 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun CampusServiceScreen(service: WhpuCampusService, onBack: () -> Unit, onCardSaved: (() -> Unit)? = null) {
+fun CampusServiceScreen(service: WhpuCampusService, onBack: () -> Unit,
+    onCardSaved: (() -> Unit)? = null, onElectricitySignedIn: (() -> Unit)? = null) {
     val context = LocalContext.current
     val model: CampusWebViewModel = viewModel(key = service.name, factory = viewModelFactory {
         initializer { CampusWebViewModel(context, service) }
     })
     var browserError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(model.cardSaved) {
-        if (model.cardSaved) { model.consumeCardSaved(); onCardSaved?.invoke() }
+        if (model.cardSaved) { model.consumeCardSaved(); (onCardSaved ?: onElectricitySignedIn)?.invoke() }
     }
     BackHandler(model.canGoBack) { model.back() }
     DisposableEffect(model, context) {
@@ -238,12 +249,17 @@ fun CampusServiceScreen(service: WhpuCampusService, onBack: () -> Unit, onCardSa
                     if (onCardSaved != null) Button(onClick = model::syncCard, enabled = model.cardReady && !model.cardSyncing) {
                         Text(if (model.cardSyncing) "正在同步…" else "同步余额与账单")
                     }
+                    if (onElectricitySignedIn != null) Button(onClick = model::signInElectricity, enabled = model.cardReady && !model.cardSyncing) {
+                        Text(if (model.cardSyncing) "正在验证…" else "完成登录，返回电费")
+                    }
                     TextButton(onClick = model::home) { Text("返回入口") }
                     TextButton(onClick = model::retry) { Text("重试") }
                     TextButton(onClick = { browserError = openCampusBrowser(context, service.entry) }) { Text("在浏览器打开") }
                 }
                 (browserError ?: model.error)?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                if (onCardSaved != null) Text(model.cardMessage ?: "登录门户后选择“虚拟校园卡”，进入后点击同步。",
+                if (onCardSaved != null || onElectricitySignedIn != null) Text(model.cardMessage ?:
+                    if (onElectricitySignedIn != null) "登录门户后选择“虚拟校园卡”，再点击上方按钮返回查询余额。"
+                    else "登录门户后选择“虚拟校园卡”，进入后点击同步。",
                     style = MaterialTheme.typography.bodySmall)
             }
             if (model.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
