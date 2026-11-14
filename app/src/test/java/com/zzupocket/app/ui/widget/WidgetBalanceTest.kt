@@ -248,11 +248,20 @@ class WidgetBalanceTest {
 
     @Test
     fun `没设置房间时右上角明说_电表块不给可用天数的空话`() {
-        val p = build(roomLabel = "", lightKwh = null, acKwh = null, lightAt = null, acAt = null)
+        val p = build(roomLabel = "", lightKwh = null, acKwh = null, lightAt = null, acAt = null,
+            cardYuan = null, cardAt = null)
         assertEquals("没设置房间", p.update)
         assertEquals("宿舍电量", p.leftTitle)
         assertEquals("—", p.leftBlocks[0].value)
         assertEquals("", p.leftBlocks[0].hint)
+    }
+
+    @Test
+    fun `只有校园卡缓存也显示实际更新时间`() {
+        val p = build(roomLabel = "", lightKwh = null, acKwh = null, lightAt = null, acAt = null,
+            cardAt = now - 30 * hour)
+        assertEquals(WidgetBalance.updateLabel(now - 30 * hour, now), p.update)
+        assertEquals("36.50", p.rightBlocks[0].value)
     }
 
     @Test
