@@ -40,8 +40,7 @@ import kotlinx.coroutines.launch
  *  · 其余（兜底）→ App 今天页
  * 三个目标的 PendingIntent 必须用不同 requestCode，见 [Widgets.openApp]。
  *
- * 顺带一个闭环：点组件会打开 App，而 App 一打开就重画桌面组件、点校园卡还会重查余额，
- * 所以右上角那个「22:30 更新」天然就是"点一下就更新的入口"。
+ * 点击组件打开原生校园卡缓存页；联网刷新由用户手动触发。
  *
  * ## 数据全是本地的
  * 电量余额与用量采样在 Room；可用天数由本机采样推的日均算出来（写「约」是认真的）；
@@ -179,7 +178,8 @@ class EnergyCardWidget : AppWidgetProvider() {
                     viewId = it,
                     context = context,
                     targetHeightDp = blockHeightDp,
-                    naturalHeightDp = Widgets.NATURAL_BLOCK_HEIGHT_DP,
+                    naturalHeightDp = Widgets.NATURAL_BLOCK_HEIGHT_DP +
+                        if (it == R.id.block_r1 || it == R.id.block_r2) 16 else 0,
                 )
             }
 

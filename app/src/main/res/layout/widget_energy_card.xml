@@ -322,7 +322,12 @@
 
                     <TextView
                         android:id="@+id/value_3"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="16sp"
+                        android:autoSizeMaxTextSize="28sp"
+                        android:autoSizeStepGranularity="1sp"
                         android:layout_height="wrap_content"
                         android:includeFontPadding="false"
                         android:maxLines="1"
@@ -340,23 +345,19 @@
                         android:text="@string/widget_unit_yuan"
                         android:textColor="@color/widget_text_dim"
                         android:textSize="@dimen/widget_block_unit" />
-
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:id="@+id/hint_3"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:includeFontPadding="false"
-                        android:maxLines="1"
-                        android:text="@string/widget_preview_balance_today"
-                        android:textColor="@color/widget_text_hint"
-                        android:textSize="@dimen/widget_block_hint" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/hint_3"
+                    android:layout_width="match_parent"
+                    android:layout_marginTop="2dp"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="@string/widget_preview_balance_today"
+                    android:textColor="@color/widget_text_hint"
+                    android:textSize="@dimen/widget_block_hint" />
             </LinearLayout>
 
             <TextView
@@ -411,7 +412,12 @@
 
                     <TextView
                         android:id="@+id/value_4"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:autoSizeTextType="uniform"
+                        android:autoSizeMinTextSize="16sp"
+                        android:autoSizeMaxTextSize="28sp"
+                        android:autoSizeStepGranularity="1sp"
                         android:layout_height="wrap_content"
                         android:includeFontPadding="false"
                         android:maxLines="1"
@@ -429,23 +435,19 @@
                         android:text="@string/widget_unit_yuan"
                         android:textColor="@color/widget_text_dim"
                         android:textSize="@dimen/widget_block_unit" />
-
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:id="@+id/hint_4"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:includeFontPadding="false"
-                        android:maxLines="1"
-                        android:text="@string/widget_preview_balance_week_count"
-                        android:textColor="@color/widget_text_hint"
-                        android:textSize="@dimen/widget_block_hint" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/hint_4"
+                    android:layout_width="match_parent"
+                    android:layout_marginTop="2dp"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="@string/widget_preview_balance_week_count"
+                    android:textColor="@color/widget_text_hint"
+                    android:textSize="@dimen/widget_block_hint" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

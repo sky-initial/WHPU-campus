@@ -68,7 +68,7 @@ data class WidgetBalancePlan(
  *
  * ## 数据从哪来
  * 全部本地：电表余额与用量采样在 Room，校园卡余额是上次查到后存的缓存
- * （`CardBalanceStore`），今日/本周消费来自本地流水。组件**自己不打任何接口**，
+ * （当前 WHPU 账号/卡快照），今日/本周消费来自本地流水。组件**自己不打任何接口**，
  * 所以数字可能不新 —— 右上角如实标注更新时刻（取三份数据里**最旧**的那份，宁可保守）。
  */
 object WidgetBalance {
@@ -239,8 +239,7 @@ object WidgetBalance {
         )
 
         val update = when {
-            // 房间没配之前两个电表都是空的，先把最该做的事说出来
-            !hasRoom -> "没设置房间"
+            !hasRoom && cardAt == null -> "没设置房间"
             else -> updateLabel(listOfNotNull(lightAt, acAt, cardAt).minOrNull(), nowMillis)
         }
 
