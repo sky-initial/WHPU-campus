@@ -74,7 +74,7 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         if (service != WhpuCampusService.SEAT) {
-            settings.userAgentString = portalDesktopUserAgent(settings.userAgentString)
+            settings.userAgentString = campusMobileUserAgent(settings.userAgentString)
         }
         settings.allowFileAccess = false
         settings.allowContentAccess = false

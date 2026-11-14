@@ -23,8 +23,9 @@ const val PORTAL_ENTRY = "https://e.whpu.edu.cn/"
 const val SEAT_ENTRY = "https://office.chaoxing.com/front/third/apps/seat/index?fidEnc=6ec64fc018ca2c0f&mappId=7521502"
 const val LIBRARY_ENTRY = "http://opac.lib.whpu.edu.cn/reader/redr_info.php"
 
-/** School's ordinary-browser portal is the desktop entry; preserve the installed Chromium version. */
-fun portalDesktopUserAgent(agent: String): String = agent
-    .replaceFirst(Regex("\\([^)]*\\)"), "(X11; Linux x86_64)")
-    .replace(" Version/4.0", "")
-    .replace(" Mobile", "")
+/** The card service routes desktop clients to an unavailable PC electricity page. */
+fun campusMobileUserAgent(agent: String): String {
+    val browser = agent.replace("; wv", "").replace(" Version/4.0", "")
+    // Tablet WebViews omit Mobile; use the same verified mobile portal and card flow.
+    return if (browser.contains(" Mobile ")) browser else browser.replace(" Safari/", " Mobile Safari/")
+}
