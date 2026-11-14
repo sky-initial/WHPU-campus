@@ -259,7 +259,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 composable(ROUTE_ABOUT) {
                     Column(Modifier.statusBarsPadding().padding(24.dp)) {
                         Text("WHPU Pocket", style = MaterialTheme.typography.titleLarge)
-                        Text("支持真实课表、成绩和考试查询及离线缓存，未导入时展示虚构演示课表。校园卡、电费和图书馆提供官方网页入口，网页内容需联网查看。")
+                        Text("支持真实课表、成绩、考试和校园卡查询及离线缓存，未导入课表时展示虚构演示课表。校园卡通过学校网页登录后手动同步余额与账单；电费和图书馆提供官方网页入口，网页内容需联网查看。")
                         Text("基于 ZZUPocket 开发，保留原项目 MIT 许可证及版权声明。")
                         TextButton(onClick = { navController.popBackStack() }) { Text("返回") }
                     }
@@ -318,7 +318,12 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                     CampusServiceScreen(WhpuCampusService.ELECTRICITY, onBack = { navController.popBackStack() })
                 }
                 composable(ROUTE_CARD) {
-                    CampusServiceScreen(WhpuCampusService.CARD, onBack = { navController.popBackStack() })
+                    com.zzupocket.app.ui.campus.WhpuCardScreen(onBack = { navController.popBackStack() },
+                        onLogin = { navController.navigate(AppRoutes.CARD_WEB) })
+                }
+                composable(AppRoutes.CARD_WEB) {
+                    CampusServiceScreen(WhpuCampusService.CARD, onBack = { navController.popBackStack() },
+                        onCardSaved = { navController.popBackStack() })
                 }
                 composable(ROUTE_LIBRARY) {
                     LibraryServicesScreen(onBack = { navController.popBackStack() },

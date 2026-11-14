@@ -20,10 +20,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.zzupocket.app.data.whpu.*
+import com.zzupocket.app.core.AppGraph
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** Retained only in memory across rotation; auth URLs are never written to saved state. */
 @SuppressLint("SetJavaScriptEnabled")
@@ -37,7 +44,16 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
     var canGoBack by mutableStateOf(false)
         private set
     private var cancelViewportFix: (() -> Unit)? = null
-    private var cleared = false
+    @Volatile private var cleared = false
+    @Volatile private var navigationRevision = 0L
+    var cardReady by mutableStateOf(false)
+        private set
+    var cardSyncing by mutableStateOf(false)
+        private set
+    var cardMessage by mutableStateOf<String?>(null)
+        private set
+    var cardSaved by mutableStateOf(false)
+        private set
     private fun cancelPendingFix() {
         cancelViewportFix?.invoke()
         cancelViewportFix = null
@@ -51,6 +67,7 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
         }
     }
     val webView = WebView(windowContext).apply {
+        webChromeClient = com.zzupocket.app.ui.web.SchoolWebChromeClient()
         setBackgroundColor(android.graphics.Color.WHITE)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -71,6 +88,8 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
                 return true
             }
             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                navigationRevision++
+                cardReady = false
                 cancelPendingFix()
                 if (!service.allows(url)) {
                     view.stopLoading()
@@ -85,9 +104,11 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
                 loading = false
                 canGoBack = view.canGoBack()
                 if (view.url == url) repairViewport(view, url)
+                cardReady = error == null && view.url == url && WhpuCardWebHandoff.allows(url)
             }
 
             override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                navigationRevision++
                 canGoBack = view.canGoBack()
             }
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, sslError: android.net.http.SslError) {
@@ -121,9 +142,53 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
             }
         }
     }
-    fun retry() { webView.reload() }
-    fun home() { webView.loadUrl(service.entry) }
-    fun back() { webView.goBack() }
+    private fun beginNavigation() {
+        navigationRevision++
+        cardReady = false
+    }
+    fun retry() { beginNavigation(); webView.reload() }
+    fun home() { beginNavigation(); webView.loadUrl(service.entry) }
+    fun back() { beginNavigation(); webView.goBack() }
+    fun consumeCardSaved() { cardSaved = false }
+    fun syncCard() {
+        if (cardSyncing || !cardReady) return
+        cardSyncing = true
+        cardMessage = null
+        val generation = navigationRevision
+        viewModelScope.launch {
+            var revision = AppGraph.whpuCardSession.currentRevision()
+            try {
+                val credentials = readCardCredentials(generation)
+                if (cleared || generation != navigationRevision) throw WhpuCardException.SessionChanged()
+                AppGraph.whpuCardSession.accept(credentials.token, credentials.type, webView.settings.userAgentString,
+                    expectedRevision = revision, isCurrent = { !cleared && generation == navigationRevision })
+                revision = AppGraph.whpuCardSession.currentRevision()
+                AppGraph.whpuCardRepository.refresh { !cleared && generation == navigationRevision }
+                try { com.zzupocket.app.ui.widget.Widgets.refreshAll(appContext)
+                } catch (e: CancellationException) { throw e
+                } catch (_: Exception) { cardMessage = "已保存校园卡，桌面组件稍后更新。" }
+                cardSaved = true
+            } catch (e: CancellationException) { throw e
+            } catch (e: WhpuCardException) {
+                if (e is WhpuCardException.SessionExpired) AppGraph.whpuCardSession.clearIfCurrent(revision)
+                cardMessage = e.message
+            } catch (_: Exception) { cardMessage = "校园卡同步失败，请重试。本地缓存保留。"
+            } finally { cardSyncing = false }
+        }
+    }
+    internal suspend fun readCardCredentials(generation: Long = navigationRevision): WhpuCardWebHandoff.Credentials =
+        suspendCancellableCoroutine { continuation ->
+            if (cleared || generation != navigationRevision || !WhpuCardWebHandoff.allows(webView.url)) {
+                continuation.resumeWithException(WhpuCardException.SessionChanged())
+            } else webView.evaluateJavascript(WhpuCardWebHandoff.script) { value ->
+                if (continuation.isActive) {
+                    if (cleared || generation != navigationRevision || !WhpuCardWebHandoff.allows(webView.url)) {
+                        continuation.resumeWithException(WhpuCardException.SessionChanged())
+                    } else try { continuation.resume(WhpuCardWebHandoff.decodeCallback(value))
+                    } catch (e: WhpuCardException) { continuation.resumeWithException(e) }
+                }
+            }
+        }
     fun attach(context: Context): WebView {
         windowContext.baseContext = context
         (webView.parent as? ViewGroup)?.removeView(webView)
@@ -148,12 +213,15 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun CampusServiceScreen(service: WhpuCampusService, onBack: () -> Unit) {
+fun CampusServiceScreen(service: WhpuCampusService, onBack: () -> Unit, onCardSaved: (() -> Unit)? = null) {
     val context = LocalContext.current
     val model: CampusWebViewModel = viewModel(key = service.name, factory = viewModelFactory {
         initializer { CampusWebViewModel(context, service) }
     })
     var browserError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(model.cardSaved) {
+        if (model.cardSaved) { model.consumeCardSaved(); onCardSaved?.invoke() }
+    }
     BackHandler(model.canGoBack) { model.back() }
     DisposableEffect(model, context) {
         onDispose { model.detach(context) }
@@ -167,11 +235,16 @@ fun CampusServiceScreen(service: WhpuCampusService, onBack: () -> Unit) {
             Column(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                 Text(service.instruction, style = MaterialTheme.typography.bodySmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (onCardSaved != null) Button(onClick = model::syncCard, enabled = model.cardReady && !model.cardSyncing) {
+                        Text(if (model.cardSyncing) "正在同步…" else "同步余额与账单")
+                    }
                     TextButton(onClick = model::home) { Text("返回入口") }
                     TextButton(onClick = model::retry) { Text("重试") }
                     TextButton(onClick = { browserError = openCampusBrowser(context, service.entry) }) { Text("在浏览器打开") }
                 }
                 (browserError ?: model.error)?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                if (onCardSaved != null) Text(model.cardMessage ?: "登录门户后选择“虚拟校园卡”，进入后点击同步。",
+                    style = MaterialTheme.typography.bodySmall)
             }
             if (model.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = {

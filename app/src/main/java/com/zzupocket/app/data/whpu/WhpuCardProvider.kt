@@ -15,17 +15,21 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 
-/** In-memory only. The future WebView handoff must check its origin and navigation generation. */
+/** In-memory only. WebView handoff checks its origin and navigation generation. */
 class WhpuCardSession {
     private val mutex = Mutex()
     private var authorization: String? = null
     private var userAgent: String? = null
     private var revision = 0L
 
-    suspend fun accept(token: String, tokenType: String = "bearer", userAgent: String) = mutex.withLock {
+    suspend fun accept(token: String, tokenType: String = "bearer", userAgent: String,
+        expectedRevision: Long? = null, isCurrent: () -> Boolean = { true }) = mutex.withLock {
         require(token.isNotBlank() && token.none { it.isWhitespace() || it.isISOControl() })
         require(tokenType.equals("bearer", ignoreCase = true))
         require(userAgent.isNotBlank() && '\r' !in userAgent && '\n' !in userAgent)
+        if ((expectedRevision != null && revision != expectedRevision) || !isCurrent()) {
+            throw WhpuCardException.SessionChanged()
+        }
         authorization = "bearer $token"
         this.userAgent = userAgent
         revision += 1
@@ -38,6 +42,12 @@ class WhpuCardSession {
     }
 
     internal suspend fun currentRevision(): Long = mutex.withLock { revision }
+
+    internal suspend fun clearIfCurrent(expectedRevision: Long) = mutex.withLock {
+        if (revision == expectedRevision) {
+            authorization = null; userAgent = null; revision += 1
+        }
+    }
 
     internal suspend fun capture(): Lease = mutex.withLock { Lease(
         revision, authorization ?: throw WhpuCardException.SessionExpired(),
@@ -71,6 +81,13 @@ class WhpuCardProvider(
 
     suspend fun fetch(): WhpuCardSnapshot {
         val lease = session.capture()
+        return try { fetch(lease) } catch (e: WhpuCardException.SessionExpired) {
+            session.clearIfCurrent(lease.revision)
+            throw e
+        }
+    }
+
+    private suspend fun fetch(lease: WhpuCardSession.Lease): WhpuCardSnapshot {
         val owner = WhpuCardParser.owner(get(lease, "/berserker-base/user"))
         val type = WhpuCardParser.balanceType(get(lease, "/berserker-app/frontInfo"))
         val cards = WhpuCardParser.cards(get(lease, "/berserker-app/ykt/tsm/queryCard"), type)

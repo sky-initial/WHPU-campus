@@ -45,14 +45,15 @@ class WhpuCardRepository(
     suspend fun current(): WhpuCardCache? = dao.getLinked(ACTIVE_KEY)?.decode()
     suspend fun cached(owner: WhpuCardOwner): WhpuCardCache? = dao.get(key(owner))?.decode()
 
-    suspend fun refresh(): WhpuCardCache = refreshMutex.withLock {
+    suspend fun refresh(isCurrent: () -> Boolean = { true }): WhpuCardCache = refreshMutex.withLock {
         val revision = session.currentRevision()
         val result = source.fetch()
-        if (result.sessionRevision != revision) throw WhpuCardException.SessionChanged()
+        if (result.sessionRevision != revision || !isCurrent()) throw WhpuCardException.SessionChanged()
         validate(result)
         session.withCurrent(revision) {
             db.withTransaction {
                 currentCoroutineContext().ensureActive()
+                if (!isCurrent()) throw WhpuCardException.SessionChanged()
                 val previous = cached(result.owner)
                 val selected = previous?.selectedCardAccount?.takeIf { account ->
                     result.cards.any { it.account == account }
@@ -62,6 +63,7 @@ class WhpuCardRepository(
                 dao.put(KvCacheEntity(target, Json.encodeToString(cache), cache.fetchedAt, 0))
                 dao.put(KvCacheEntity(ACTIVE_KEY, target, cache.fetchedAt, 0))
                 currentCoroutineContext().ensureActive()
+                if (!isCurrent()) throw WhpuCardException.SessionChanged()
                 cache
             }
         }

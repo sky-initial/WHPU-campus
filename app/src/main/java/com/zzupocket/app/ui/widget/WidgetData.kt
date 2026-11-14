@@ -6,7 +6,7 @@ import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.data.repo.ElectricityRepository
 import com.zzupocket.app.domain.EnergySample
 import com.zzupocket.app.domain.EnergyStats
-import com.zzupocket.app.domain.CardStats
+import com.zzupocket.app.data.whpu.totals
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.LocalTime
@@ -161,15 +161,20 @@ object WidgetData {
      * 全部来自本地：
      *  · 电表余额 = Room 里最近一条读数；
      *  · 「可用约 N 天」= 余额 ÷ 近 7 天日均，日均由本机采样算（和电费页同一套 `EnergyStats`）；
-     *  · 校园卡余额 = 上次成功查询时的缓存（`CardBalanceStore`）；
+     *  · 校园卡余额 = 上次成功查询时的缓存（当前 WHPU 账号/卡快照）；
      *  · 校园卡今日/本周消费 = 本地流水里算。
      * 这里**不发任何请求**。
      */
     suspend fun loadBalance(prefs: UiPrefs): WidgetBalanceBundle {
         val repo = AppGraph.electricityRepository
         val nowMillis = System.currentTimeMillis()
-        val card = runCatching { AppGraph.cardBalanceStore.latest() }.getOrNull()
-        val cardTotals = runCatching { cardTotals() }.getOrNull()
+        val cardCache = AppGraph.whpuCardRepository.current()
+        val card = cardCache?.selectedCard?.let {
+            com.zzupocket.app.data.prefs.CachedCardBalance(it.balanceFen / 100.0, cardCache.fetchedAt)
+        }
+        val cardTotals = cardCache?.totals()?.let {
+            CardTotals(it.todaySpendFen / 100.0, it.weekSpendFen / 100.0, it.weekCount)
+        }
 
         val (lightRoom, acRoom) = runCatching { repo.effectiveRooms() }.getOrDefault("" to "")
         if (lightRoom.isBlank() && acRoom.isBlank()) {
@@ -237,24 +242,4 @@ object WidgetData {
     /** 校园卡的今日/本周消费（元）与本周笔数 */
     private data class CardTotals(val today: Double, val week: Double, val weekCount: Int)
 
-    /**
-     * 校园卡今日/本周花了多少。本地流水里算，不联网。
-     *
-     * 一条流水都没有（从没同步过）时返回 null —— 那种情况下"今日 0.00"是**假信息**，
-     * 界面上要说"未同步"而不是假装今天没花钱。
-     */
-    private suspend fun cardTotals(): CardTotals? {
-        val all = AppGraph.cardRepository.all()
-        if (all.isEmpty()) return null
-        val today = CardStats.dayKey(System.currentTimeMillis())
-        val weekStart = CardStats.weekStart(today)
-        val spends = all.filter { it.isSpend }
-        val todaySpend = spends.filter { CardStats.dayKey(it.ts) == today }.sumOf { -it.amount }
-        val weekSpends = spends.filter { CardStats.dayKey(it.ts) >= weekStart }
-        return CardTotals(
-            today = todaySpend,
-            week = weekSpends.sumOf { -it.amount },
-            weekCount = weekSpends.size,
-        )
-    }
 }

@@ -27,9 +27,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zzupocket.app.core.AppGraph
-import com.zzupocket.app.data.auth.AuthRepository
-import com.zzupocket.app.data.repo.CardRepository
-import com.zzupocket.app.domain.CardStats
+import com.zzupocket.app.data.whpu.totals
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,85 +48,28 @@ data class TodayCardUi(
     val note: String? = null,
 )
 
-/**
- * 「今天」页的校园卡卡片：余额 + 今日消费。
- *
- * 明细来自本地库（离线也有），余额要联网查，所以**带 5 分钟节流**，
- * 避免每次切回「今天」都去打一次接口。
- */
+/** Today reads the same selected-card snapshot as the native list and widgets. No network requests. */
 class TodayCardViewModel : ViewModel() {
-
-    private val repo: CardRepository = AppGraph.cardRepository
-    private val auth: AuthRepository = AppGraph.authRepository
-
-    private var cachedBalance: Double? = null
-    private var lastBalanceAt = 0L
-
+    private val repo = AppGraph.whpuCardRepository
     private val _state = MutableStateFlow(TodayCardUi())
     val state: StateFlow<TodayCardUi> = _state.asStateFlow()
+    init { viewModelScope.launch { repo.observeCurrent().collect { _state.value = it.toTodayCardUi() } } }
+    fun reload() { viewModelScope.launch { _state.value = repo.current().toTodayCardUi() } }
+}
 
-    init {
-        viewModelScope.launch { load() }
-    }
-
-    fun reload() {
-        viewModelScope.launch { load() }
-    }
-
-    private suspend fun load() {
-        val now = System.currentTimeMillis()
-        val loggedIn = auth.isLoggedIn()
-        val today = CardStats.dayKey(now)
-
-        val transactions = runCatching { repo.all() }.getOrDefault(emptyList())
-        val todayTx = transactions.filter { CardStats.dayKey(it.ts) == today }
-        val spend = todayTx.filter { it.isSpend }.sumOf { -it.amount }
-        val income = todayTx.filter { it.isIncome }.sumOf { it.amount }
-        val last = todayTx.maxByOrNull { it.ts }
-
-        var loading = false
-        var note: String? = null
-        // 冷启动时先把上次存下来的余额显示出来（离线也看得见），再去查新的
-        val stored = runCatching { AppGraph.cardBalanceStore.latest() }.getOrNull()
-        if (cachedBalance == null && stored != null) {
-            cachedBalance = stored.yuan
-            lastBalanceAt = stored.at
-        }
-        if (loggedIn && now - lastBalanceAt > BALANCE_TTL_MS) {
-            loading = true
-            _state.value = _state.value.copy(loading = true)
-            runCatching { repo.balance() }
-                .onSuccess {
-                    val at = System.currentTimeMillis()
-                    cachedBalance = it
-                    lastBalanceAt = at
-                    // 存一份给桌面组件用（组件不能联网，只能读这份缓存）
-                    runCatching { AppGraph.cardBalanceStore.save(it, at) }
-                }
-                .onFailure { note = "余额暂时读不到，稍后自动重试" }
-        } else if (!loggedIn) {
-            note = "登录后显示余额"
-        }
-
-        _state.value = TodayCardUi(
-            loggedIn = loggedIn,
-            balance = cachedBalance,
-            todaySpend = spend,
-            todayIncome = income,
-            todayCount = todayTx.size,
-            lastTrade = last?.let { tx ->
-                val who = tx.merchantName.ifBlank { tx.summary }.ifBlank { "一笔" }
-                "$who ${formatMoney(tx.amount)}"
-            },
-            loading = loading,
-            note = note,
-        )
-    }
-
-    private companion object {
-        /** 余额查询节流：这期间只用缓存值 */
-        const val BALANCE_TTL_MS = 5 * 60 * 1000L
-    }
+private fun com.zzupocket.app.data.whpu.WhpuCardCache?.toTodayCardUi(): TodayCardUi {
+    val cache = this ?: return TodayCardUi(note = "登录校园卡后手动同步余额与账单")
+    val selected = cache.selectedCard ?: return TodayCardUi(note = "学校当前未返回校园卡")
+    val total = cache.totals()!!
+    val today = com.zzupocket.app.data.whpu.WhpuCalendar.today()
+    val last = cache.transactionsFor(selected.account).filter {
+        java.time.Instant.ofEpochMilli(it.displayedAt).atZone(com.zzupocket.app.data.whpu.WhpuCalendar.zone).toLocalDate() == today
+    }.maxByOrNull { it.displayedAt }
+    return TodayCardUi(loggedIn = true, balance = selected.balanceFen / 100.0,
+        todaySpend = total.todaySpendFen / 100.0, todayIncome = total.todayIncomeFen / 100.0,
+        todayCount = total.todayCount,
+        lastTrade = last?.let { "${it.summary.ifBlank { "校园卡交易" }} ${com.zzupocket.app.data.whpu.cardMoney(it.amountFen)}" },
+        note = "本地缓存 · 更新于 ${com.zzupocket.app.data.whpu.cardDateTime(cache.fetchedAt)}")
 }
 
 @Composable
@@ -170,11 +111,11 @@ fun TodayCardBalanceCard(
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (state.balance != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = buildString {
-                        append("今日消费 ¥ ${formatMoney(state.todaySpend)}")
-                        if (state.todayCount > 0) append(" · ${state.todayCount} 笔")
+                        append("今日支出 ¥ ${formatMoney(state.todaySpend)}")
+                        if (state.todayCount > 0) append(" · ${state.todayCount} 笔交易")
                         if (state.todayIncome > 0) {
                             append(" · 入账 ¥ ${formatMoney(state.todayIncome)}")
                         }

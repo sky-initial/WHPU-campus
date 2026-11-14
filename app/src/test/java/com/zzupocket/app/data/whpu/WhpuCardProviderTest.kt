@@ -92,6 +92,15 @@ class WhpuCardProviderTest {
         })
         assertTrue(runCatching { api.fetch() }.exceptionOrNull() is WhpuCardException.SessionChanged)
     }
+    @Test fun oldUnauthorizedRequestDoesNotClearNewSession() = runTest {
+        val session = session()
+        val api = WhpuCardProvider(session, client {
+            runBlocking { session.accept("new-synthetic", userAgent = "synthetic-webview") }
+            401 to ""
+        })
+        assertTrue(runCatching { api.fetch() }.exceptionOrNull() is WhpuCardException.SessionExpired)
+        assertEquals("bearer new-synthetic", session.capture().authorization)
+    }
     @Test fun emptyCardResultDoesNotQueryUnownedTransactions() = runTest {
         var turnoverCalls = 0
         val snapshot = WhpuCardProvider(session(), client {
@@ -147,6 +156,29 @@ class WhpuCardProviderTest {
         finish.complete(Unit)
         commit.await(); clear.await()
         assertTrue(runCatching { session.check(revision) }.exceptionOrNull() is WhpuCardException.SessionChanged)
+    }
+    @Test fun lateHandoffCannotReplaceNewSession() = runTest {
+        val session = session()
+        val before = session.currentRevision()
+        session.accept("new-synthetic", userAgent = "synthetic-webview")
+        val result = runCatching { session.accept("old-synthetic", userAgent = "synthetic-webview", expectedRevision = before) }
+        assertTrue(result.exceptionOrNull() is WhpuCardException.SessionChanged)
+        assertEquals("bearer new-synthetic", session.capture().authorization)
+    }
+    @Test fun navigationIsCheckedAfterWaitingForSessionLock() = runTest {
+        val session = session()
+        val revision = session.currentRevision()
+        val entered = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val finish = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val hold = async { session.withCurrent(revision) { entered.complete(Unit); finish.await() } }
+        entered.await()
+        var current = true
+        val accept = async { runCatching {
+            session.accept("late-synthetic", userAgent = "synthetic-webview", expectedRevision = revision, isCurrent = { current })
+        } }
+        kotlinx.coroutines.yield(); current = false; finish.complete(Unit); hold.await()
+        assertTrue(accept.await().exceptionOrNull() is WhpuCardException.SessionChanged)
+        assertEquals("bearer synthetic-secret", session.capture().authorization)
     }
     @Test fun cancellingFetchCancelsNetworkCall() = runBlocking {
         val started = CountDownLatch(1)

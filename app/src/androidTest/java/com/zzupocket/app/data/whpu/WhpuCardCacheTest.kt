@@ -160,4 +160,10 @@ class WhpuCardCacheTest {
         assertTrue(runCatching { repo(records = listOf(record(), record())).refresh() }.isFailure)
         assertEquals(before, repo().current())
     }
+    @Test fun navigationChangedBeforeCommitKeepsPreviousSnapshot() = runBlocking {
+        val before = repo().refresh()
+        assertTrue(runCatching { repo(ownerB).refresh { false } }.exceptionOrNull() is WhpuCardException.SessionChanged)
+        assertEquals(before, repo().current())
+        assertNull(repo().cached(ownerB))
+    }
 }
