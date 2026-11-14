@@ -15,6 +15,7 @@ import androidx.room.withTransaction
 import com.zzupocket.app.MainActivity
 import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.core.WeekSettings
+import com.zzupocket.app.data.whpu.WhpuCalendar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
+import java.time.format.DateTimeFormatter
 
 class ClassDndController(
     private val context: Context,
@@ -38,6 +40,7 @@ class ClassDndController(
     val status = _status.asStateFlow()
     fun hasPolicyAccess() = notifications.isNotificationPolicyAccessGranted
     fun hasExactAlarmAccess() = alarms.canScheduleExactAlarms()
+    fun systemInterruptionFilter() = notifications.currentInterruptionFilter
 
     fun observe(scope: CoroutineScope) {
         AppGraph.db.invalidationTracker.addObserver(object : InvalidationTracker.Observer(
@@ -85,7 +88,8 @@ class ClassDndController(
         if (!settings.enabled) {
             cancelAlarms()
             if (settings.ruleId != null && hasPolicyAccess()) {
-                setCondition(settings.ruleId, false)
+                if (notifications.getAutomaticZenRule(settings.ruleId) == null) store.save(false, null)
+                else setCondition(settings.ruleId, false)
             }
             _status.value = "已关闭"
             return
@@ -98,16 +102,18 @@ class ClassDndController(
         val rule = id?.let(notifications::getAutomaticZenRule)
         if (rule == null || !rule.isEnabled) {
             cancelAlarms()
-            store.save(false, id)
+            store.save(false, if (rule == null) null else id)
             _status.value = "系统中的上课规则已关闭或删除。"
             return
         }
         val plan = loadPlan()
         scheduleBoundary(plan.nextBoundary)
         setCondition(id, plan.active)
+        val boundary = plan.nextBoundary?.atZone(WhpuCalendar.zone)
+            ?.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
         _status.value = when {
-            plan.active -> "当前为上课时段；系统中的手动设置优先。"
-            plan.nextBoundary != null -> "等待下一次上课，按北京时间自动切换。"
+            plan.active -> "当前为上课时段，预计 $boundary 结束（北京时间）；系统中的手动设置优先。"
+            boundary != null -> "等待下一次上课：$boundary（北京时间）。"
             else -> "没有可调度的课程，请确认真实课表和第一周日期。"
         }
     }
@@ -117,7 +123,7 @@ class ClassDndController(
         store.save(false, id)
         cancelAlarms()
         if (id != null && hasPolicyAccess()) {
-            setCondition(id, false)
+            // Removing our rule also ends it; API 31 throws when setting a deleted rule's condition.
             notifications.removeAutomaticZenRule(id)
             store.save(false, null)
         }

@@ -58,20 +58,32 @@ class ClassDndSystemTest {
             assertEquals(state, notifications.getAutomaticZenRuleState(id))
         }
     }
+    private suspend fun awaitFilter(expected: Int) {
+        repeat(30) {
+            if (notifications.currentInterruptionFilter == expected) return
+            delay(100)
+        }
+        assertEquals(expected, notifications.currentInterruptionFilter)
+    }
     @Test fun classStartsEndsAndToggleRemovesOnlyItsOwnRule() = runBlocking {
         val original = notifications.currentInterruptionFilter
         controller.setEnabled(true)
         val id = store.current().ruleId!!
         awaitState(id, Condition.STATE_TRUE)
+        if (original == NotificationManager.INTERRUPTION_FILTER_ALL) {
+            awaitFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        }
         assertEquals(ZenPolicy.STATE_ALLOW, notifications.getAutomaticZenRule(id)!!.zenPolicy!!.priorityCategoryAlarms)
         plan = ClassDndPlan(false, Instant.now().plusSeconds(7200), emptyList())
         controller.refresh()
         awaitState(id, Condition.STATE_FALSE)
+        // Assert before removing the rule: removal must not hide a failed class-end transition.
+        awaitFilter(original)
+        assertTrue(notifications.getAutomaticZenRule(id)!!.isEnabled)
         controller.setEnabled(false)
         assertNull(notifications.getAutomaticZenRule(id))
         assertFalse(store.current().enabled)
-        repeat(30) { if (notifications.currentInterruptionFilter != original) delay(100) }
-        assertEquals(original, notifications.currentInterruptionFilter)
+        awaitFilter(original)
     }
     @Test fun endingClassKeepsAnotherActiveRule() = runBlocking {
         val uri = Uri.parse("condition://${context.packageName}/synthetic-other")
@@ -83,9 +95,25 @@ class ClassDndSystemTest {
         awaitState(extraRule!!, Condition.STATE_TRUE)
         controller.setEnabled(true)
         awaitState(store.current().ruleId!!, Condition.STATE_TRUE)
-        controller.setEnabled(false)
+        plan = ClassDndPlan(false, null, emptyList())
+        controller.refresh()
+        awaitState(store.current().ruleId!!, Condition.STATE_FALSE)
         awaitState(extraRule!!, Condition.STATE_TRUE)
         assertTrue(notifications.getAutomaticZenRule(extraRule!!)!!.isEnabled)
+        awaitFilter(NotificationManager.INTERRUPTION_FILTER_ALARMS)
+    }
+    @Test fun reopenedControllerEndsPersistedRuleAfterClass() = runBlocking {
+        val original = notifications.currentInterruptionFilter
+        controller.setEnabled(true)
+        val id = store.current().ruleId!!
+        awaitState(id, Condition.STATE_TRUE)
+        plan = ClassDndPlan(false, null, emptyList())
+        controller = ClassDndController(context, store, 5300) { plan }
+        controller.refresh()
+        awaitState(id, Condition.STATE_FALSE)
+        awaitFilter(original)
+        assertTrue(store.current().enabled)
+        assertEquals(id, store.current().ruleId)
     }
     @Test fun deletedRuleDoesNotGetRecreatedInBackground() = runBlocking {
         controller.setEnabled(true)
@@ -93,6 +121,36 @@ class ClassDndSystemTest {
         notifications.removeAutomaticZenRule(id)
         controller.refresh()
         assertFalse(store.current().enabled)
+        assertNull(store.current().ruleId)
         assertNull(notifications.getAutomaticZenRule(id))
+        controller.setEnabled(false)
+    }
+    @Test fun closingAfterSystemDeletionDoesNotUpdateMissingRule() = runBlocking {
+        controller.setEnabled(true)
+        val id = store.current().ruleId!!
+        notifications.removeAutomaticZenRule(id)
+        controller.setEnabled(false)
+        assertFalse(store.current().enabled)
+        assertNull(store.current().ruleId)
+    }
+    @Test fun disabledStaleRuleReferenceIsClearedOnRefresh() = runBlocking {
+        controller.setEnabled(true)
+        val id = store.current().ruleId!!
+        notifications.removeAutomaticZenRule(id)
+        store.save(false, id)
+        controller.refresh()
+        assertNull(store.current().ruleId)
+        assertEquals("已关闭", controller.status.value)
+    }
+    @Test fun systemDisabledRuleStaysDisabledWhenAppRefreshes() = runBlocking {
+        controller.setEnabled(true)
+        val id = store.current().ruleId!!
+        val rule = notifications.getAutomaticZenRule(id)!!
+        rule.isEnabled = false
+        assertTrue(notifications.updateAutomaticZenRule(id, rule))
+        controller.refresh()
+        assertFalse(store.current().enabled)
+        assertFalse(notifications.getAutomaticZenRule(id)!!.isEnabled)
+        assertEquals(id, store.current().ruleId)
     }
 }
