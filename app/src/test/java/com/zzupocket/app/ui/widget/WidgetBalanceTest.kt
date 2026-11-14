@@ -38,6 +38,7 @@ class WidgetBalanceTest {
         cardWeekSpend: Double? = 87.6,
         cardWeekCount: Int? = 5,
         singleMeter: Boolean = false,
+        electricityAvailable: Boolean = true,
     ) = WidgetBalance.build(
         roomLabel = roomLabel,
         lightKwh = lightKwh,
@@ -53,6 +54,7 @@ class WidgetBalanceTest {
         cardWeekCount = cardWeekCount,
         nowMillis = now,
         singleMeter = singleMeter,
+        electricityAvailable = electricityAvailable,
     )
 
     /**
@@ -283,4 +285,45 @@ class WidgetBalanceTest {
         assertEquals("未同步", p.rightBlocks[0].hint)
         assertEquals("未同步", p.rightBlocks[1].hint)
     }
+    @Test
+    fun `未接入电费不展示旧房间读数或采样且更新时间只取校园卡`() {
+        val plan = build(electricityAvailable = false, lightKwh = -99.0,
+            lightAt = now - 48 * hour, acAt = now - 24 * hour)
+        assertEquals("宿舍电费", plan.leftTitle)
+        assertEquals(listOf("待接入", "打开"), plan.leftBlocks.map { it.value })
+        assertTrue(plan.leftBlocks.all { it.unit.isEmpty() && it.hint.isEmpty() && !it.alert })
+        assertEquals("22:30 更新", plan.update)
+        assertEquals(build().rightBlocks, plan.rightBlocks)
+    }
+
+    @Test
+    fun `未接入电费且无校园卡缓存时不提示设置房间`() {
+        val plan = build(electricityAvailable = false, cardAt = null, cardYuan = null,
+            cardTodaySpend = null, cardWeekSpend = null, cardWeekCount = null)
+        assertEquals("打开 App 更新", plan.update)
+        assertEquals("—", plan.rightBlocks[0].value)
+        assertEquals("未同步", plan.rightBlocks[1].hint)
+    }
+
+    @Test
+    fun `生产快照只展示校园卡及电费网页入口`() {
+        val plan = WidgetBalanceBundle(36.5, now, 3.2, 87.6, 5, now).plan()
+        assertEquals("宿舍电费", plan.leftTitle)
+        assertEquals("待接入", plan.leftBlocks[0].value)
+        assertEquals("36.50", plan.rightBlocks[0].value)
+        assertEquals("87.60", plan.rightBlocks[1].value)
+    }
+
+    @Test
+    fun `设备时区不同仍按北京时间显示缓存更新时间`() {
+        val previous = java.util.TimeZone.getDefault()
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Halifax"))
+            assertEquals("22:30 更新", WidgetBalance.updateLabel(now, now))
+            assertEquals("昨天 21:30", WidgetBalance.updateLabel(now - 25 * hour, now))
+        } finally {
+            java.util.TimeZone.setDefault(previous)
+        }
+    }
+
 }

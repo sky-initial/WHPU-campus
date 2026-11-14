@@ -16,36 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * 「电量与校园卡」桌面组件（4×2）：**左右两半，每半两个数据块**。
- *
- * ```
- *                                        22:30 更新
- *  宿舍电量 · 柳园20号楼101   ┊  校园卡
- *  ▌照明                ┊  ▌余额
- *    152.82 度  可用约 29 天 ┊    36.50 元   今日 3.20
- *  ──────────────────────┊─────────────────────
- *  ▌空调                ┊  ▌本周
- *    80.21 度   可用约 21 天 ┊    87.60 元   5 笔
- * ```
- *
- * ## 为什么改成左右结构
- * 上一版是"三行指标、数字右对齐占满整宽"，那是按官方老公式的 **110dp 高**排的，
- * 而**实测画布是 195dp** —— 于是上部挤、下部空 85dp（用户报的"下部分很空"）。
- * 现在每半两块、块用 `layout_weight=1` 平分高度并竖直居中：盒子里有多少空间就吃多少；
- * 数字从 17dp 提到 28dp；点击区从 28dp 的窄条变成两块大区域。
- *
- * ## 两块可点区域
- *  · 左半 → **电费页**（房间就是在电费页设的）
- *  · 右半 → **校园卡页**
- *  · 其余（兜底）→ App 今天页
- * 三个目标的 PendingIntent 必须用不同 requestCode，见 [Widgets.openApp]。
- *
- * 点击组件打开原生校园卡缓存页；联网刷新由用户手动触发。
- *
- * ## 数据全是本地的
- * 电量余额与用量采样在 Room；可用天数由本机采样推的日均算出来（写「约」是认真的）；
- * 校园卡余额是上次 App 查到后存下的缓存，今日/本周消费来自本地流水。
- * 组件自己不联网，所以数字可能不新 —— 右上角如实标注更新时刻。
+ * 左侧打开官方电费页；右侧显示当前 WHPU 校园卡缓存并打开原生查询页。
+ * 电费原生查询待接入，不显示旧项目电表读数。组件只读缓存，不发起网络请求。
  */
 class EnergyCardWidget : AppWidgetProvider() {
 
@@ -77,7 +49,7 @@ class EnergyCardWidget : AppWidgetProvider() {
             try {
                 val ctx = context.applicationContext
                 val prefs = WidgetData.prefs()
-                render(ctx, mgr, ids, WidgetData.loadBalance(prefs), prefs)
+                render(ctx, mgr, ids, WidgetData.loadBalance(), prefs)
             } catch (t: Throwable) {
                 Log.w(TAG, "刷新「电量与校园卡」失败", t)
             } finally {
@@ -121,7 +93,7 @@ class EnergyCardWidget : AppWidgetProvider() {
             }
         }
 
-        private fun build(
+        internal fun build(
             context: Context,
             plan: WidgetBalancePlan,
             colors: WidgetColors,

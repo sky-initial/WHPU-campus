@@ -1,33 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  「电量与校园卡」的实际布局（**真实画布实测 342×195dp**）：左右两半，每半两个数据块。
-
-  ┌─────────────────────────────────┊───────────────────────────────────┐
-  │                                                    22:30 更新       │ ← @id/update
-  │ 宿舍电量 · 柳园20号楼101             ┊ 校园卡                            │ ← @id/left_title / right_title
-  │ ▌照明                           ┊ ▌余额                            │ ← 块：色条 + 块名
-  │   152.82 度      可用约 29 天   ┊   36.50 元        今日 3.20       │ ← 块：数字 + 单位 + 右侧小字
-  │ ────────────────────────────────┊────────────────────────────────── │ ← @id/left_divider / right_divider
-  │ ▌空调                           ┊ ▌本周                            │
-  │   80.21 度       可用约 21 天   ┊   87.60 元        5 笔           │
-  └─────────────────────────────────┊───────────────────────────────────┘
-
-  ## 为什么是"左右两半 + 块"
-  上一版是"三行指标、数字右对齐占满整宽"，那是按官方老公式的 **110dp 高**排的，
-  而真实画布是 **195dp** —— 于是上部挤、下部空 85dp（用户报的"下部分很空"）。
-  改成左右两半、每半两块之后：
-    · 每块用 `layout_weight=1` 平分高度，块内容竖直居中 → 盒子里有多少空间就吃多少，**不会再空**；
-    · 数字可以放到 28dp（上一版 17dp），块内独占一行 → `-1234.56 度` 也放得下；
-    · 点击区变成两块大区域：左半 → 电费页、右半 → 校园卡页（不再是 28dp 的窄条）。
-
-  ## 两块可点区域
-    @id/zone_energy（整半，左）→ **电费页**（房间就是在电费页设的）
-    @id/zone_card  （整半，右）→ **校园卡页**
-    @id/widget_root（兜底）    → App 今天页
-  ⚠️ 三个目标的 PendingIntent **必须用不同 requestCode**（见 Widgets.openApp 的注释）。
-
-  RemoteViews 的限制见 widget_today_classes.xml 顶部注释。
--->
+<!-- 电费官方入口与校园卡缓存；预览数据仅用于展示布局。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -104,7 +76,7 @@
                         android:layout_marginStart="6dp"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:text="@string/widget_balance_light"
+                        android:text="@string/widget_electricity_query"
                         android:textColor="@color/widget_text"
                         android:textSize="@dimen/widget_block_label"
                         android:textStyle="bold" />
@@ -135,7 +107,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="3dp"
                         android:includeFontPadding="false"
-                        android:text="@string/widget_unit_kwh"
+                        android:text=""
                         android:textColor="@color/widget_text_dim"
                         android:textSize="@dimen/widget_block_unit" />
 
@@ -193,7 +165,7 @@
                         android:layout_marginStart="6dp"
                         android:includeFontPadding="false"
                         android:maxLines="1"
-                        android:text="@string/widget_balance_ac"
+                        android:text="@string/widget_electricity_web"
                         android:textColor="@color/widget_text"
                         android:textSize="@dimen/widget_block_label"
                         android:textStyle="bold" />
@@ -224,7 +196,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="3dp"
                         android:includeFontPadding="false"
-                        android:text="@string/widget_unit_kwh"
+                        android:text=""
                         android:textColor="@color/widget_text_dim"
                         android:textSize="@dimen/widget_block_unit" />
 
