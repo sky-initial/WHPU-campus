@@ -101,7 +101,15 @@ class WhpuElectricityRepository(
         require(owner.id.toLongOrNull()?.let { it > 0 } == true)
         return "whpu-electricity:owner:${owner.id}"
     }
-    private fun KvCacheEntity.decode(): WhpuElectricityCache = Json.decodeFromString(ElectricityCacheSerializer, payload)
+    private fun KvCacheEntity.decode(): WhpuElectricityCache {
+        val cache = Json.decodeFromString(ElectricityCacheSerializer, payload)
+        return cache.copy(readings = cache.readings.map { reading ->
+            if (reading.room.feeItemId == WHPU_CHANGQING_JINHU_ELECTRICITY &&
+                reading.value.kind == WhpuElectricityReadingKind.SCHOOL_REMAINING) {
+                reading.copy(value = reading.value.copy(kind = WhpuElectricityReadingKind.YUAN))
+            } else reading
+        })
+    }
 
     companion object { internal const val ACTIVE_KEY = "whpu-electricity:active" }
 }

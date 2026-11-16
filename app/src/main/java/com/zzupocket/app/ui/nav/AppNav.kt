@@ -259,7 +259,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                 composable(ROUTE_ABOUT) {
                     Column(Modifier.statusBarsPadding().padding(24.dp)) {
                         Text("WHPU Pocket", style = MaterialTheme.typography.titleLarge)
-                        Text("支持真实课表、成绩、考试、校园卡和三个电费分组查询及离线缓存，未导入课表时展示虚构演示课表。校园卡和电费通过学校网页登录后手动查询；电费按学校结果显示金额或剩余电量，学校未标明单位时保留原数值并提示。图书馆使用官方网页，网页内容需联网查看。")
+                        Text("支持真实课表、成绩、考试、校园卡和三个电费分组查询及离线缓存，未导入课表时展示虚构演示课表。校园卡和电费通过学校网页登录后手动查询，电费显示人民币余额。图书馆使用官方网页，网页内容需联网查看。")
                         Text("基于 ZZUPocket 开发，保留原项目 MIT 许可证及版权声明。")
                         TextButton(onClick = { navController.popBackStack() }) { Text("返回") }
                     }

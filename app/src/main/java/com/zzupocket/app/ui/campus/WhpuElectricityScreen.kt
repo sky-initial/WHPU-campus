@@ -146,7 +146,7 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
                     TextButton(onClick = openSchool, enabled = !model.busy) { Text("学校登录 / 官方网页") }
                 }
                 model.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Text("按学校返回的金额或剩余电量显示；照明与空调分别选择。缴费请进入官方网页。",
+                Text("显示人民币余额；照明与空调分别选择。缴费请进入官方网页。",
                     style = MaterialTheme.typography.bodySmall)
             }
             val current = cache

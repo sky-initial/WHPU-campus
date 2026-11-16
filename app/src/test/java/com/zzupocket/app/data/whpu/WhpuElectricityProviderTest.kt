@@ -88,13 +88,13 @@ class WhpuElectricityProviderTest {
         }
     }
 
-    @Test fun remainingBalanceUsesFee1NumericIdsAndPreservesTheOfficialReading() = runTest {
+    @Test fun remainingBalanceUsesFee1NumericIdsAndPreservesConfirmedYuanPrecision() = runTest {
         val requests = mutableListOf<Request>()
         val snapshot = WhpuElectricityProvider(session(), client {
             requests += it
             200 to if (it.method == "GET") CardFixture.owner() else ElectricityFixture.remainingBalance()
         }).balance(ElectricityFixture.remainingRoom)
-        assertEquals(WhpuElectricityValue("12.3400", WhpuElectricityReadingKind.SCHOOL_REMAINING), snapshot.value)
+        assertEquals(WhpuElectricityValue("12.3400", WhpuElectricityReadingKind.YUAN), snapshot.value)
         assertEquals(ElectricityFixture.remainingRoom, snapshot.room)
         val post = requests.single { it.method == "POST" }
         assertEquals("/charge/feeitem/getThirdData", post.url.encodedPath)

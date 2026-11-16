@@ -339,31 +339,47 @@ class WidgetBalanceTest {
     }
 
     @Test
-    fun `学校剩余读数保留精度且不补货币或电量单位`() {
+    fun `第三组金额保留精度和尾零并显示人民币`() {
         val room = WhpuElectricityRoom(WhpuCardOwner("101"), WHPU_CHANGQING_JINHU_ELECTRICITY,
             listOf(
                 WhpuElectricityStep(WhpuElectricityLevel("campus", "公寓", 1), WhpuElectricityOption("人工公寓", "11")),
                 WhpuElectricityStep(WhpuElectricityLevel("building", "楼层", 2), WhpuElectricityOption("人工楼层", "22")),
                 WhpuElectricityStep(WhpuElectricityLevel("room", "房间", 3), WhpuElectricityOption("人工房间", "33")),
             ))
-        for (number in listOf("12.3456", "0", "-0.0001")) {
+        for (number in listOf("12.3456", "12.3400", "0", "-0.0010")) {
             val reading = WhpuElectricityReading(room,
-                WhpuElectricityValue(number, WhpuElectricityReadingKind.SCHOOL_REMAINING), now - 25 * hour)
+                WhpuElectricityValue(number, WhpuElectricityReadingKind.YUAN), now - 25 * hour)
             val plan = WidgetBalanceBundle(36.5, now, 3.2, 87.6, 5, now, reading).plan()
-            assertEquals("当前剩余电量", plan.leftBlocks[0].label)
+            assertEquals("电费余额", plan.leftBlocks[0].label)
             assertEquals(number, plan.leftBlocks[0].value)
-            assertEquals("", plan.leftBlocks[0].unit)
-            assertEquals("学校未标注单位", plan.leftBlocks[0].hint)
+            assertEquals("元", plan.leftBlocks[0].unit)
+            assertEquals("", plan.leftBlocks[0].hint)
+            assertEquals(number.startsWith('-'), plan.leftBlocks[0].alert)
             assertEquals("人工房间", plan.leftBlocks[1].hint)
             assertEquals("昨天 21:30", plan.update)
             assertTrue(plan.leftBlocks.all { block ->
                 listOf(block.label, block.value, block.unit, block.hint).none { text ->
-                    text.contains("¥") || text.contains("元") || text.contains("度") || text.contains("可用约")
+                    text.contains("学校未标注单位") || text.contains("度") || text.contains("可用约")
                 }
             })
             assertEquals("36.50", plan.rightBlocks[0].value)
             assertEquals("元", plan.rightBlocks[0].unit)
         }
+    }
+
+    @Test
+    fun `未确认项目的剩余读数不会因第三组金额确认而自动加人民币单位`() {
+        // An artificial, unverified project exercises only presentation of the explicit kind.
+        val room = WhpuElectricityRoom(WhpuCardOwner("101"), "synthetic-unverified",
+            listOf(WhpuElectricityStep(WhpuElectricityLevel("room", "房间", 1),
+                WhpuElectricityOption("人工房间", "33"))))
+        val reading = WhpuElectricityReading(room,
+            WhpuElectricityValue("12.3400", WhpuElectricityReadingKind.SCHOOL_REMAINING), now)
+        val block = WidgetBalanceBundle(null, null, null, null, null, now, reading).plan().leftBlocks[0]
+        assertEquals("当前剩余电量", block.label)
+        assertEquals("12.3400", block.value)
+        assertEquals("", block.unit)
+        assertEquals("学校未标注单位", block.hint)
     }
 
     @Test

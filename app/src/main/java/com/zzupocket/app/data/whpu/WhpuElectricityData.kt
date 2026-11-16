@@ -99,7 +99,8 @@ object WhpuElectricityParser {
         if (room.feeItemId == WHPU_CHANGQING_JINHU_ELECTRICITY) {
             val reading = map.getValue("showData").jsonObject.getValue("当前剩余电量").jsonPrimitive
             require(reading.isString && numberPattern.matches(reading.content))
-            return@parse WhpuElectricityValue(reading.content, WhpuElectricityReadingKind.SCHOOL_REMAINING)
+            // The school label omits the unit; the user confirmed yuan for fee item 1 on 2026-11-16.
+            return@parse WhpuElectricityValue(reading.content, WhpuElectricityReadingKind.YUAN)
         }
         val text = map.getValue("showData").jsonObject.text("信息")
         val amount = requireNotNull(profiles.getValue(room.feeItemId).pattern.matchEntire(text)).groupValues[1]

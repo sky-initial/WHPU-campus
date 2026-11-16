@@ -148,7 +148,7 @@ class WhpuElectricityScreenTest {
         }
     }
 
-    @Test fun remainingGroupUsesNativeSelectionAndKeepsItsUnitlessCacheAfterReturnAndFailure() = runBlocking {
+    @Test fun thirdGroupUsesNativeSelectionAndKeepsYuanCacheAfterReturnAndFailure() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "electricity-remaining-screen-${UUID.randomUUID()}.db"
         val db = Room.databaseBuilder(context, AppDatabase::class.java, name).build()
@@ -190,14 +190,14 @@ class WhpuElectricityScreenTest {
                     awaitText(label); click(label)
                 }
                 awaitText("已保存电费查询结果")
-                assertRemainingVisible()
+                assertThirdGroupYuanVisible()
                 assertFalse(loginOpened.get())
                 assertEquals(expected, forms.toList())
                 val cached = repository.current()!!
                 assertEquals(WHPU_CHANGQING_JINHU_ELECTRICITY, cached.selectedRoom!!.feeItemId)
                 assertEquals(listOf("campus", "building", "room"), cached.selectedRoom!!.steps.map { it.field.code })
                 assertEquals(listOf("11", "22", "33"), cached.selectedRoom!!.steps.map { it.option.value })
-                assertEquals(WhpuElectricityValue("12.3456", WhpuElectricityReadingKind.SCHOOL_REMAINING), cached.selected!!.value)
+                assertEquals(WhpuElectricityValue("12.345600", WhpuElectricityReadingKind.YUAN), cached.selected!!.value)
                 cached
             }
 
@@ -212,7 +212,7 @@ class WhpuElectricityScreenTest {
                     MaterialTheme { WhpuElectricityScreen(onBack = {}, onLogin = { loginOpened.set(true) }, model = restored) }
                 } }
                 assertEquals(cached, withTimeout(5_000) { restored.cache.first { it?.selected != null } })
-                assertRemainingVisible()
+                assertThirdGroupYuanVisible()
                 assertEquals(expected, forms.toList())
                 assertEquals(cached, repository.current())
 
@@ -222,7 +222,7 @@ class WhpuElectricityScreenTest {
                     "forms=${forms.toList()}; restored message=${restored.message}, busy=${restored.busy}, " +
                         "cache=${restored.cache.value}; original message=${model.message}, busy=${model.busy}"
                 }
-                assertRemainingVisible()
+                assertThirdGroupYuanVisible()
                 assertEquals(expected + remainingForm("IEC", 3), forms.toList())
                 assertEquals(cached, repository.current())
                 assertFalse(loginOpened.get())
@@ -245,17 +245,17 @@ class WhpuElectricityScreenTest {
         return """{"code":200,"map":{"total":[$fields],"data":[{"name":"$name","value":"$id"}]}}"""
     }
 
-    private val remainingBalance = """{"code":200,"map":{"showData":{"当前剩余电量":"12.3456"},"data":{
+    private val remainingBalance = """{"code":200,"map":{"showData":{"当前剩余电量":"12.345600"},"data":{
         "campusid":"11","campus":"人工公寓","buildingid":"22","building":"人工楼层",
         "roomid":"33","room":"人工房间"}}}"""
 
-    private fun assertRemainingVisible() {
-        awaitText("当前剩余电量"); awaitText("12.3456"); awaitText("学校未标注单位")
+    private fun assertThirdGroupYuanVisible() {
+        awaitText("电费余额"); awaitText("¥ 12.345600")
         val root = InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow
         assertNotNull(root)
         try {
-            assertFalse(find(root, "¥", false))
-            assertFalse(find(root, "元", false))
+            assertFalse(find(root, "学校未标注单位", false))
+            assertFalse(find(root, "当前剩余电量", false))
             assertFalse(find(root, "度", false))
         } finally { root.recycle() }
     }

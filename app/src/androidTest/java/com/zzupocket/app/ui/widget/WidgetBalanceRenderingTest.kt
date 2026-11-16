@@ -109,7 +109,7 @@ class WidgetBalanceRenderingTest {
         }
     }
 
-    @Test fun schoolRemainingIsVisibleWithoutInventedUnitsInThreeWidgetSizesAndBothThemes() {
+    @Test fun thirdGroupYuanAndTrailingZeroesAreVisibleInThreeWidgetSizesAndBothThemes() {
         val room = WhpuElectricityRoom(WhpuCardOwner("101"), WHPU_CHANGQING_JINHU_ELECTRICITY,
             listOf(
                 WhpuElectricityStep(WhpuElectricityLevel("campus", "公寓", 1), WhpuElectricityOption("人工公寓", "11")),
@@ -117,7 +117,7 @@ class WidgetBalanceRenderingTest {
                 WhpuElectricityStep(WhpuElectricityLevel("room", "房间", 3), WhpuElectricityOption("人工房间", "33")),
             ))
         val reading = WhpuElectricityReading(room,
-            WhpuElectricityValue("12.3456", WhpuElectricityReadingKind.SCHOOL_REMAINING), 0L)
+            WhpuElectricityValue("12.3400", WhpuElectricityReadingKind.YUAN), 0L)
         instrumentation.runOnMainSync {
             for (mode in listOf(DarkMode.LIGHT, DarkMode.DARK)) {
                 for ((width, height) in listOf(250 to 165, 340 to 195, 460 to 250)) {
@@ -128,8 +128,8 @@ class WidgetBalanceRenderingTest {
                         Widgets.openApp(context, AppRoutes.CARD),
                         Widgets.openApp(context, AppRoutes.TODAY), height).apply(context, null)
                     layout(view, width, height)
-                    for ((id, expected) in listOf(R.id.label_1 to "当前剩余电量",
-                        R.id.value_1 to "12.3456", R.id.hint_1 to "学校未标注单位")) {
+                    for ((id, expected) in listOf(R.id.label_1 to "电费余额",
+                        R.id.value_1 to "12.3400", R.id.unit_1 to "元")) {
                         val text = view.findViewById<TextView>(id)
                         val case = "$mode ${width}x$height $expected"
                         assertEquals(case, expected, text.text.toString())
@@ -144,10 +144,11 @@ class WidgetBalanceRenderingTest {
                             bounds.right <= view.width && bounds.bottom <= view.height)
                         assertNotEquals(case, colors.bg, text.currentTextColor)
                     }
-                    assertEquals("", view.findViewById<TextView>(R.id.unit_1).text.toString())
+                    assertEquals("", view.findViewById<TextView>(R.id.hint_1).text.toString())
+                    assertEquals(View.GONE, view.findViewById<TextView>(R.id.hint_1).visibility)
                     assertEquals("人工房间", view.findViewById<TextView>(R.id.hint_2).text.toString())
                     val leftTexts = textViews(view.findViewById(R.id.zone_energy)).map { it.text.toString() }
-                    assertFalse(leftTexts.any { it.contains("¥") || it.contains("元") || it.contains("度") || it.contains("可用约") })
+                    assertFalse(leftTexts.any { it.contains("学校未标注单位") || it.contains("度") || it.contains("可用约") })
                     assertEquals("36.50", view.findViewById<TextView>(R.id.value_3).text.toString())
                     assertEquals("元", view.findViewById<TextView>(R.id.unit_3).text.toString())
                 }

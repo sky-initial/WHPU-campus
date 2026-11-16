@@ -146,11 +146,11 @@ class WhpuElectricityParserTest {
             ElectricityFixture.lightingRoom.copy(steps = ElectricityFixture.lightingRoom.steps.dropLast(1))) }
     }
 
-    @Test fun remainingGroupKeepsTheOfficialNumberWithoutAssigningAUnit() {
+    @Test fun remainingGroupKeepsConfirmedYuanPrecisionAndTrailingZeroes() {
         assertEquals(ElectricityFixture.remainingLevels,
             WhpuElectricityParser.directory(ElectricityFixture.remainingDirectory()).levels)
         for (number in listOf("12.3400", "0", "0.0000", "-0.0010", "999999999999999999999999.123456")) {
-            assertEquals(WhpuElectricityValue(number, WhpuElectricityReadingKind.SCHOOL_REMAINING),
+            assertEquals(WhpuElectricityValue(number, WhpuElectricityReadingKind.YUAN),
                 WhpuElectricityParser.balance(ElectricityFixture.remainingBalance(number), ElectricityFixture.remainingRoom))
         }
     }
