@@ -1,5 +1,6 @@
 package com.zzupocket.app.ui.schedule
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -87,6 +88,8 @@ object ScheduleBackground {
 }
 
 /** 组合式读取：解码放到 IO 线程，别卡住首帧 */
+// The producer assigns value below; AGP 8.7.3 / Compose runtime 1.7.6 lint reports a false positive.
+@SuppressLint("ProduceStateDoesNotAssignValue")
 @Composable
 fun rememberScheduleBackground(context: Context, path: String?, version: Int): ImageBitmap? =
     produceState<ImageBitmap?>(initialValue = null, path, version) {
