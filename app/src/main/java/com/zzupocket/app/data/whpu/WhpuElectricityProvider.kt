@@ -36,9 +36,9 @@ class WhpuElectricityProvider(
         WhpuElectricityParser.requestContext(room)
         val owner = owner(lease)
         if (owner != room.owner) throw WhpuElectricityException.SessionChanged()
-        val amount = WhpuElectricityParser.balance(query(lease, room.feeItemId, room.steps, "IEC"), room)
+        val value = WhpuElectricityParser.balance(query(lease, room.feeItemId, room.steps, "IEC"), room)
         confirmOwner(lease, owner)
-        WhpuElectricitySnapshot(lease.revision, room, amount)
+        WhpuElectricitySnapshot(lease.revision, room, value)
     }
 
     private suspend fun owner(lease: WhpuCardSession.Lease): WhpuCardOwner =

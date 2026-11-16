@@ -16,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * 左侧显示所选房间的人民币余额，右侧显示当前校园卡缓存；点击进入相应原生页。
+ * 左侧显示所选房间的官方查询值，右侧显示当前校园卡缓存；点击进入相应原生页。
  * 组件只读缓存，不发起网络请求，不读取旧项目电量或推算剩余天数。
  */
 class EnergyCardWidget : AppWidgetProvider() {
@@ -151,7 +151,8 @@ class EnergyCardWidget : AppWidgetProvider() {
                     context = context,
                     targetHeightDp = blockHeightDp,
                     naturalHeightDp = Widgets.NATURAL_BLOCK_HEIGHT_DP +
-                        if (it == R.id.block_r1 || it == R.id.block_r2) 16 else 0,
+                        if (it == R.id.block_r1 || it == R.id.block_r2 ||
+                            it == R.id.block_l1 && plan.leftBlocks.first().hint.isNotBlank()) 16 else 0,
                 )
             }
 
@@ -162,6 +163,10 @@ class EnergyCardWidget : AppWidgetProvider() {
                 listOf(R.id.value_1, R.id.value_2, R.id.value_3, R.id.value_4).forEach {
                     rv.setTextViewTextSize(it, android.util.TypedValue.COMPLEX_UNIT_DIP, size)
                 }
+            }
+            // The official unit note occupies a third line in compact widgets.
+            if (heightDp in 1..169 && plan.leftBlocks.first().hint.isNotBlank()) {
+                rv.setTextViewTextSize(R.id.value_1, android.util.TypedValue.COMPLEX_UNIT_DIP, 18f * factor / 0.85f)
             }
             return rv
         }

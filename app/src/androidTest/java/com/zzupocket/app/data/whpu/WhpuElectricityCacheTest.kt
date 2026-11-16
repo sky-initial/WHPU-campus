@@ -43,9 +43,23 @@ class WhpuElectricityCacheTest {
             WhpuElectricityStep(WhpuElectricityLevel(code, label, index + 1),
                 WhpuElectricityOption(value.substringAfter('&'), value))
         })
+    private fun lightingRoom(leaf: String = "test-room"): WhpuElectricityRoom {
+        val general = room(leaf = leaf)
+        return general.copy(feeItemId = WHPU_JINYINHU_LIGHTING,
+            steps = general.steps.drop(1).mapIndexed { index, step ->
+                step.copy(field = step.field.copy(level = index + 1))
+            })
+    }
+    private fun schoolRoom() = WhpuElectricityRoom(ownerA, WHPU_CHANGQING_JINHU_ELECTRICITY, listOf(
+        Triple("campus", "公寓", "10001"), Triple("building", "楼层", "20002"),
+        Triple("room", "房间", "30003"),
+    ).mapIndexed { index, (code, label, id) ->
+        WhpuElectricityStep(WhpuElectricityLevel(code, label, index + 1), WhpuElectricityOption("人工$label", id))
+    })
+    private fun yuan(number: String) = WhpuElectricityValue(number, WhpuElectricityReadingKind.YUAN)
     private fun repo(amount: String = "12.34", at: Long = 1000L, source: WhpuElectricitySource? = null) =
         WhpuElectricityRepository(db, source ?: WhpuElectricitySource {
-            WhpuElectricitySnapshot(session.currentRevision(), it, amount)
+            WhpuElectricitySnapshot(session.currentRevision(), it, yuan(amount))
         }, session, now = { at })
 
     @Test fun multipleMeterBalancesAndSelectedRoomSurviveReopen() = runBlocking {
@@ -55,49 +69,57 @@ class WhpuElectricityCacheTest {
         db.close(); open()
         assertEquals(before, repo().current())
         assertEquals(before, repo().observeCurrent().first())
-        assertEquals("12.34", before!!.selected!!.balanceYuan)
+        assertEquals(yuan("12.34"), before!!.selected!!.value)
         assertEquals(2, before.readings.size)
         assertEquals(1000L, before.selected!!.fetchedAt)
     }
 
     @Test fun sameLeafInDifferentGroupsRetainsIndependentBalancesAndSelectionAfterReopen() = runBlocking {
-        val general = room()
-        val lighting = general.copy(feeItemId = WHPU_JINYINHU_LIGHTING,
-            steps = general.steps.drop(1).mapIndexed { index, step ->
-                step.copy(field = step.field.copy(level = index + 1))
-            })
+        val general = room(leaf = "30003")
+        val lighting = lightingRoom(leaf = "30003")
+        val school = schoolRoom()
         assertEquals(general.steps.last().option, lighting.steps.last().option)
+        assertEquals(general.steps.last().option.name, school.steps.last().option.name)
+        assertEquals(general.steps.last().option.value.substringBefore('&'), school.steps.last().option.value)
         val originalGeneral = repo().refresh(general).selected!!
         repo(amount = "12.3456", at = 2000L).refresh(lighting)
+        val schoolReading = repo(amount = "12.3456", at = 2500L).refresh(school).selected!!
         val before = repo().current()!!
-        assertEquals(2, before.readings.size)
-        assertEquals(lighting, before.selectedRoom)
-        assertEquals("12.3456", before.selected!!.balanceYuan)
+        assertEquals(3, before.readings.size)
+        assertEquals(school, before.selectedRoom)
+        assertEquals(yuan("12.3456"), before.selected!!.value)
+        assertEquals(yuan("12.3456"), before.readings.single { it.room == lighting }.value)
 
         db.close(); open()
         assertEquals(before, repo().current())
         assertEquals(before, repo().observeCurrent().first())
 
         val refreshed = repo(amount = "-0.0001", at = 3000L).refresh(lighting)
-        assertEquals(2, refreshed.readings.size)
+        assertEquals(3, refreshed.readings.size)
         assertEquals(originalGeneral, refreshed.readings.single { it.room == general })
-        assertEquals("-0.0001", refreshed.selected!!.balanceYuan)
+        assertEquals(schoolReading, refreshed.readings.single { it.room == school })
+        assertEquals(yuan("-0.0001"), refreshed.selected!!.value)
         assertEquals(3000L, refreshed.selected!!.fetchedAt)
         repo().select(general)
         assertEquals(originalGeneral, repo().observeCurrent().first()!!.selected)
         repo().select(lighting)
         assertEquals(refreshed, repo().observeCurrent().first())
+        repo().select(school)
 
         db.close(); open()
-        assertEquals(refreshed, repo().observeCurrent().first())
+        assertEquals(refreshed.copy(selectedRoom = school), repo().observeCurrent().first())
+        assertEquals(schoolReading, repo().current()!!.selected)
     }
 
     @Test fun sameRoomIdentityOnDifferentAccountsNeverMixes() = runBlocking {
-        val first = repo().refresh(room())
-        val second = repo(amount = "9.00").refresh(room(ownerB))
-        assertEquals(first, repo().cached(ownerA)); assertEquals(second, repo().cached(ownerB))
-        assertEquals(second, repo().current())
-        assertTrue(second.readings.all { it.room.owner == ownerB })
+        for (selectedRoom in listOf(room(), schoolRoom())) {
+            val first = repo().refresh(selectedRoom)
+            val second = repo(amount = "9.00").refresh(selectedRoom.copy(owner = ownerB))
+            assertEquals(first, repo().cached(ownerA)); assertEquals(second, repo().cached(ownerB))
+            assertEquals(second, repo().current())
+            assertEquals(WhpuElectricityReadingKind.YUAN, second.selected!!.value.kind)
+            assertTrue(second.readings.all { it.room.owner == ownerB })
+        }
     }
 
     @Test fun legacyFenSnapshotKeepsItsSelectionAndDatesWhenAddingPreciseLightingBalance() = runBlocking {
@@ -116,25 +138,23 @@ class WhpuElectricityCacheTest {
         db.close(); open()
 
         val migrated = repo().current()!!
+        assertEquals(ownerA, migrated.owner)
         assertEquals(general, migrated.selectedRoom)
-        assertEquals("12.34", migrated.selected!!.balanceYuan)
+        assertEquals(yuan("12.34"), migrated.selected!!.value)
         assertEquals(1000L, migrated.selected!!.fetchedAt)
         val oldAc = migrated.readings.single { it.room == ac }
-        assertEquals("-0.01", oldAc.balanceYuan)
+        assertEquals(yuan("-0.01"), oldAc.value)
         assertEquals(900L, oldAc.fetchedAt)
         assertEquals(migrated, repo().observeCurrent().first())
 
-        val lighting = general.copy(feeItemId = WHPU_JINYINHU_LIGHTING,
-            steps = general.steps.drop(1).mapIndexed { index, step ->
-                step.copy(field = step.field.copy(level = index + 1))
-            })
+        val lighting = lightingRoom()
         val updated = repo(amount = "12.3456", at = 2000L).refresh(lighting)
         assertEquals(3, updated.readings.size)
         assertEquals(migrated.readings, updated.readings.filter { it.room != lighting })
-        assertEquals("12.3456", updated.selected!!.balanceYuan)
+        assertEquals(yuan("12.3456"), updated.selected!!.value)
         assertEquals(2000L, updated.selected!!.fetchedAt)
         val saved = db.kvCacheDao().get(target)!!.payload
-        assertTrue(saved.contains("\"balanceYuan\""))
+        assertFalse(saved.contains("\"balanceYuan\""))
         assertFalse(saved.contains("\"balanceFen\""))
         repo().select(general)
         db.close(); open()
@@ -144,23 +164,126 @@ class WhpuElectricityCacheTest {
         assertEquals(updated.readings, reopened.readings)
     }
 
+    @Test fun legacyYuanSnapshotKeepsPrecisionAndSelectionAlongsideThirdGroup() = runBlocking {
+        val lighting = lightingRoom()
+        val target = "whpu-electricity:owner:${ownerA.id}"
+        val roomJson = Json.encodeToString(lighting)
+        val oldPayload = """{"owner":${Json.encodeToString(ownerA)},"readings":[
+            {"room":$roomJson,"balanceYuan":"-0.0001","fetchedAt":1500}
+            ],"selectedRoom":$roomJson}"""
+        db.kvCacheDao().put(KvCacheEntity(target, oldPayload, 1500L, 0L))
+        db.kvCacheDao().put(KvCacheEntity(WhpuElectricityRepository.ACTIVE_KEY, target, 1500L, 0L))
+        db.close(); open()
+
+        val migrated = repo().observeCurrent().first()!!
+        assertEquals(ownerA, migrated.owner)
+        assertEquals(lighting, migrated.selectedRoom)
+        assertEquals(yuan("-0.0001"), migrated.selected!!.value)
+        assertEquals(1500L, migrated.selected!!.fetchedAt)
+        assertEquals(oldPayload, db.kvCacheDao().get(target)!!.payload)
+
+        val school = schoolRoom()
+        val updated = repo(amount = "12.3456", at = 2000L).refresh(school)
+        assertEquals(2, updated.readings.size)
+        assertEquals(migrated.selected, updated.readings.single { it.room == lighting })
+        assertEquals(yuan("12.3456"), updated.selected!!.value)
+        assertEquals(2000L, updated.selected!!.fetchedAt)
+        val saved = db.kvCacheDao().get(target)!!.payload
+        assertFalse(saved.contains("\"balanceYuan\""))
+        assertFalse(saved.contains("\"balanceFen\""))
+        repo().select(lighting)
+        db.close(); open()
+        assertEquals(updated.copy(selectedRoom = lighting), repo().current())
+        assertEquals(migrated.selected, repo().current()!!.selected)
+    }
+
+    @Test fun legacySchoolRemainingReadsAsYuanAndSelectionWritesExactValueWithoutFetching() = runBlocking {
+        val school = schoolRoom()
+        val target = "whpu-electricity:owner:${ownerA.id}"
+        val roomJson = Json.encodeToString(school)
+        val oldPayload = """{"owner":${Json.encodeToString(ownerA)},"readings":[
+            {"room":$roomJson,"value":{"number":"-0.000100","kind":"SCHOOL_REMAINING"},"fetchedAt":1500}
+            ],"selectedRoom":$roomJson}"""
+        val originalEntry = KvCacheEntity(target, oldPayload, 1500L, 0L)
+        val originalPointer = KvCacheEntity(WhpuElectricityRepository.ACTIVE_KEY, target, 1500L, 0L)
+        db.kvCacheDao().put(originalEntry)
+        db.kvCacheDao().put(originalPointer)
+        db.close(); open()
+
+        val noFetch = WhpuElectricitySource { error("Cache compatibility must not fetch") }
+        val expected = WhpuElectricityCache(ownerA,
+            listOf(WhpuElectricityReading(school, yuan("-0.000100"), 1500L)), school)
+        assertEquals(expected, repo(source = noFetch).current())
+        assertEquals(expected, repo(source = noFetch).observeCurrent().first())
+        assertEquals(originalEntry, db.kvCacheDao().get(target))
+        assertEquals(originalPointer, db.kvCacheDao().get(WhpuElectricityRepository.ACTIVE_KEY))
+        db.close(); open()
+        assertEquals(expected, repo(source = noFetch).current())
+        assertEquals(originalEntry, db.kvCacheDao().get(target))
+
+        repo(at = 9999L, source = noFetch).select(school)
+        val saved = db.kvCacheDao().get(target)!!
+        assertEquals(expected, Json.decodeFromString(WhpuElectricityCache.serializer(), saved.payload))
+        assertEquals(1500L, saved.fetchedAt)
+        assertEquals(0L, saved.ttlSeconds)
+        assertEquals(originalPointer, db.kvCacheDao().get(WhpuElectricityRepository.ACTIVE_KEY))
+        db.close(); open()
+        assertEquals(expected, repo(source = noFetch).observeCurrent().first())
+    }
+
+    @Test fun legacyKindCorrectionIsLimitedToThirdGroupAndRefreshPreservesOtherReading() = runBlocking {
+        val school = schoolRoom()
+        val lighting = lightingRoom()
+        val target = "whpu-electricity:owner:${ownerA.id}"
+        val schoolJson = Json.encodeToString(school)
+        val lightingJson = Json.encodeToString(lighting)
+        val oldPayload = """{"owner":${Json.encodeToString(ownerA)},"readings":[
+            {"room":$schoolJson,"value":{"number":"0012.3400","kind":"SCHOOL_REMAINING"},"fetchedAt":1500},
+            {"room":$lightingJson,"value":{"number":"4.567800","kind":"SCHOOL_REMAINING"},"fetchedAt":1400}
+            ],"selectedRoom":$lightingJson}"""
+        db.kvCacheDao().put(KvCacheEntity(target, oldPayload, 1500L, 0L))
+        db.kvCacheDao().put(KvCacheEntity(WhpuElectricityRepository.ACTIVE_KEY, target, 1500L, 0L))
+        db.close(); open()
+
+        val migrated = repo().current()!!
+        val untouched = WhpuElectricityReading(lighting,
+            WhpuElectricityValue("4.567800", WhpuElectricityReadingKind.SCHOOL_REMAINING), 1400L)
+        assertEquals(ownerA, migrated.owner)
+        assertEquals(lighting, migrated.selectedRoom)
+        assertEquals(untouched, migrated.selected)
+        assertEquals(WhpuElectricityReading(school, yuan("0012.3400"), 1500L),
+            migrated.readings.single { it.room == school })
+        assertEquals(oldPayload, db.kvCacheDao().get(target)!!.payload)
+
+        val refreshed = repo(amount = "7.0000", at = 2500L).refresh(school)
+        assertEquals(school, refreshed.selectedRoom)
+        assertEquals(WhpuElectricityReading(school, yuan("7.0000"), 2500L), refreshed.selected)
+        assertEquals(untouched, refreshed.readings.single { it.room == lighting })
+        val saved = Json.decodeFromString(WhpuElectricityCache.serializer(), db.kvCacheDao().get(target)!!.payload)
+        assertEquals(refreshed, saved)
+        db.close(); open()
+        assertEquals(refreshed, repo().observeCurrent().first())
+    }
+
     @Test fun zeroRefreshReplacesOnlyTheRequestedRoomAndPreservesOtherMeters() = runBlocking {
         val light = room(); val ac = room(meter = "ac"); val other = room(leaf = "another-room")
         repo().refresh(light); repo(amount = "5.00").refresh(ac); repo(amount = "3.00").refresh(other)
         val result = repo(amount = "0.00", at = 2000).refresh(light)
         assertEquals(3, result.readings.size)
-        assertEquals("0.00", result.selected!!.balanceYuan)
+        assertEquals(yuan("0.00"), result.selected!!.value)
         assertEquals(2000L, result.selected!!.fetchedAt)
-        assertEquals("5.00", result.readings.single { it.room == ac }.balanceYuan)
-        assertEquals("3.00", result.readings.single { it.room == other }.balanceYuan)
+        assertEquals(yuan("5.00"), result.readings.single { it.room == ac }.value)
+        assertEquals(yuan("3.00"), result.readings.single { it.room == other }.value)
     }
 
     @Test fun failureAndCancellationPreserveAmountSelectionAndSuccessfulTime() = runBlocking {
-        val before = repo().refresh(room())
-        for (failure in listOf(WhpuElectricityException.SessionExpired(), WhpuElectricityException.Parse(),
-            WhpuElectricityException.Unavailable(), CancellationException())) {
-            assertTrue(runCatching { repo(at = 2000, source = WhpuElectricitySource { throw failure }).refresh(room()) }.isFailure)
-            assertEquals(before, repo().current())
+        for (selectedRoom in listOf(room(), schoolRoom())) {
+            val before = repo().refresh(selectedRoom)
+            for (failure in listOf(WhpuElectricityException.SessionExpired(), WhpuElectricityException.Parse(),
+                WhpuElectricityException.Unavailable(), CancellationException())) {
+                assertTrue(runCatching { repo(at = 2000, source = WhpuElectricitySource { throw failure }).refresh(selectedRoom) }.isFailure)
+                assertEquals(before, repo().current())
+            }
         }
     }
 
@@ -179,7 +302,7 @@ class WhpuElectricityCacheTest {
         val started = CompletableDeferred<Unit>(); val finish = CompletableDeferred<Unit>()
         val repository = repo(source = WhpuElectricitySource {
             val revision = session.currentRevision(); started.complete(Unit); finish.await()
-            WhpuElectricitySnapshot(revision, it, "9.00")
+            WhpuElectricitySnapshot(revision, it, yuan("9.00"))
         })
         val task = async { runCatching { repository.refresh(room(ownerB)) } }
         started.await(); session.accept("changed-synthetic-token", userAgent = "synthetic-agent"); finish.complete(Unit)
@@ -191,7 +314,7 @@ class WhpuElectricityCacheTest {
         val before = repo().refresh(room())
         lateinit var task: Deferred<WhpuElectricityCache>
         val repository = WhpuElectricityRepository(db, WhpuElectricitySource {
-            WhpuElectricitySnapshot(session.currentRevision(), it, "9.99")
+            WhpuElectricitySnapshot(session.currentRevision(), it, yuan("9.99"))
         }, session, now = { task.cancel(); 2000L })
         task = async(start = CoroutineStart.LAZY) { repository.refresh(room(ownerB)) }
         task.start(); assertTrue(runCatching { task.await() }.exceptionOrNull() is CancellationException)
@@ -202,7 +325,7 @@ class WhpuElectricityCacheTest {
         val before = repo().refresh(room())
         assertTrue(runCatching { repo().refresh(room()) { false } }.exceptionOrNull() is WhpuElectricityException.SessionChanged)
         val mismatched = repo(source = WhpuElectricitySource {
-            WhpuElectricitySnapshot(session.currentRevision(), room(meter = "ac"), "5.00")
+            WhpuElectricitySnapshot(session.currentRevision(), room(meter = "ac"), yuan("5.00"))
         })
         assertTrue(runCatching { mismatched.refresh(room()) }.exceptionOrNull() is WhpuElectricityException.Parse)
         assertEquals(before, repo().current())
@@ -242,7 +365,7 @@ class WhpuElectricityCacheTest {
             WhpuCardSnapshot(session.currentRevision(), cardOwner, emptyList(), emptyList())
         }, session, onOwnerVerified = { electricity.activateOwner(it) })
         electricity = WhpuElectricityRepository(db, WhpuElectricitySource {
-            WhpuElectricitySnapshot(session.currentRevision(), it, "12.34")
+            WhpuElectricitySnapshot(session.currentRevision(), it, yuan("12.34"))
         }, session, onOwnerVerified = { card.activateOwner(it) })
         card.refresh(); val first = electricity.refresh(room())
         cardOwner = ownerB; card.refresh()

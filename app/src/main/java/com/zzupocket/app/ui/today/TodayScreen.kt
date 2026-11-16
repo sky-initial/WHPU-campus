@@ -1,5 +1,9 @@
 package com.zzupocket.app.ui.today
 
+import com.zzupocket.app.ui.campus.formatted
+import com.zzupocket.app.ui.campus.title
+import com.zzupocket.app.ui.campus.unitNote
+
 import com.zzupocket.app.core.AppGraph
 
 import androidx.compose.foundation.background
@@ -154,10 +158,13 @@ fun TodayScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("宿舍电费", style = MaterialTheme.typography.titleMedium)
                     val reading = electricity?.selected
-                    if (reading == null) Text("选择房间后查询余额 · 官方网页可用")
+                    if (reading == null) Text("选择房间后查询 · 官方网页可用")
                     else {
                         Text(reading.room.label, style = MaterialTheme.typography.bodyMedium)
-                        Text("¥ ${reading.balanceYuan}", style = MaterialTheme.typography.headlineSmall)
+                        Text(reading.value.title, style = MaterialTheme.typography.labelLarge)
+                        Text(reading.value.formatted, style = MaterialTheme.typography.headlineSmall)
+                        if (reading.value.unitNote.isNotEmpty()) Text(reading.value.unitNote,
+                            style = MaterialTheme.typography.bodySmall)
                         Text("本地缓存 · 更新于 ${com.zzupocket.app.data.whpu.cardDateTime(reading.fetchedAt)}",
                             style = MaterialTheme.typography.bodySmall)
                     }

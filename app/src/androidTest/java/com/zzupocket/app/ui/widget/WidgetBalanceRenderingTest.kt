@@ -2,6 +2,7 @@ package com.zzupocket.app.ui.widget
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
 import android.widget.RemoteViews
@@ -11,6 +12,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.zzupocket.app.R
 import com.zzupocket.app.data.prefs.DarkMode
 import com.zzupocket.app.data.prefs.UiPrefs
+import com.zzupocket.app.data.whpu.*
 import com.zzupocket.app.ui.nav.AppRoutes
 import java.io.File
 import org.junit.Assert.*
@@ -85,7 +87,8 @@ class WidgetBalanceRenderingTest {
                 for (width in listOf(250, 340)) {
                     for ((feeItemId, amount) in listOf("182" to "-1.23", "201" to "12.3456", "201" to "-0.0001")) {
                         val colors = WidgetStyle.colors(context, UiPrefs(darkMode = mode))
-                        val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room.copy(feeItemId = feeItemId), amount, 0L)
+                        val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room.copy(feeItemId = feeItemId),
+                            WhpuElectricityValue(amount, WhpuElectricityReadingKind.YUAN), 0L)
                         val plan = WidgetBalanceBundle(null, null, null, null, null, 0L, reading).plan()
                         val view = EnergyCardWidget.build(context, plan, colors,
                             Widgets.openApp(context, AppRoutes.ELECTRICITY),
@@ -101,6 +104,53 @@ class WidgetBalanceRenderingTest {
                         assertEquals("示例房间", view.findViewById<TextView>(R.id.hint_2).text.toString())
                         assertFalse(textViews(view).any { it.text.contains("度") || it.text.contains("可用约") })
                     }
+                }
+            }
+        }
+    }
+
+    @Test fun thirdGroupYuanAndTrailingZeroesAreVisibleInThreeWidgetSizesAndBothThemes() {
+        val room = WhpuElectricityRoom(WhpuCardOwner("101"), WHPU_CHANGQING_JINHU_ELECTRICITY,
+            listOf(
+                WhpuElectricityStep(WhpuElectricityLevel("campus", "公寓", 1), WhpuElectricityOption("人工公寓", "11")),
+                WhpuElectricityStep(WhpuElectricityLevel("building", "楼层", 2), WhpuElectricityOption("人工楼层", "22")),
+                WhpuElectricityStep(WhpuElectricityLevel("room", "房间", 3), WhpuElectricityOption("人工房间", "33")),
+            ))
+        val reading = WhpuElectricityReading(room,
+            WhpuElectricityValue("12.3400", WhpuElectricityReadingKind.YUAN), 0L)
+        instrumentation.runOnMainSync {
+            for (mode in listOf(DarkMode.LIGHT, DarkMode.DARK)) {
+                for ((width, height) in listOf(250 to 165, 340 to 195, 460 to 250)) {
+                    val colors = WidgetStyle.colors(context, UiPrefs(darkMode = mode))
+                    val plan = WidgetBalanceBundle(36.5, null, 3.2, 87.6, 5, 0L, reading).plan()
+                    val view = EnergyCardWidget.build(context, plan, colors,
+                        Widgets.openApp(context, AppRoutes.ELECTRICITY),
+                        Widgets.openApp(context, AppRoutes.CARD),
+                        Widgets.openApp(context, AppRoutes.TODAY), height).apply(context, null)
+                    layout(view, width, height)
+                    for ((id, expected) in listOf(R.id.label_1 to "电费余额",
+                        R.id.value_1 to "12.3400", R.id.unit_1 to "元")) {
+                        val text = view.findViewById<TextView>(id)
+                        val case = "$mode ${width}x$height $expected"
+                        assertEquals(case, expected, text.text.toString())
+                        assertEquals("$case must be visible", View.VISIBLE, text.visibility)
+                        assertTrue("$case must fit horizontally", text.paint.measureText(expected) <= text.width)
+                        assertTrue("$case must fit vertically: view=${text.height}, text=${text.layout.height}, " +
+                            "block=${view.findViewById<View>(R.id.block_l1).height}, parent=${(text.parent as View).height}",
+                            text.height >= text.layout.height)
+                        val bounds = Rect().also(text::getDrawingRect)
+                        (view as ViewGroup).offsetDescendantRectToMyCoords(text, bounds)
+                        assertTrue("$case must stay within the widget", bounds.left >= 0 && bounds.top >= 0 &&
+                            bounds.right <= view.width && bounds.bottom <= view.height)
+                        assertNotEquals(case, colors.bg, text.currentTextColor)
+                    }
+                    assertEquals("", view.findViewById<TextView>(R.id.hint_1).text.toString())
+                    assertEquals(View.GONE, view.findViewById<TextView>(R.id.hint_1).visibility)
+                    assertEquals("人工房间", view.findViewById<TextView>(R.id.hint_2).text.toString())
+                    val leftTexts = textViews(view.findViewById(R.id.zone_energy)).map { it.text.toString() }
+                    assertFalse(leftTexts.any { it.contains("学校未标注单位") || it.contains("度") || it.contains("可用约") })
+                    assertEquals("36.50", view.findViewById<TextView>(R.id.value_3).text.toString())
+                    assertEquals("元", view.findViewById<TextView>(R.id.unit_3).text.toString())
                 }
             }
         }

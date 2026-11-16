@@ -17,7 +17,7 @@ fun interface WhpuElectricitySource {
     suspend fun fetch(room: WhpuElectricityRoom): WhpuElectricitySnapshot
 }
 
-@Serializable data class WhpuElectricityReading(val room: WhpuElectricityRoom, val balanceYuan: String, val fetchedAt: Long)
+@Serializable data class WhpuElectricityReading(val room: WhpuElectricityRoom, val value: WhpuElectricityValue, val fetchedAt: Long)
 @Serializable data class WhpuElectricityCache(
     val owner: WhpuCardOwner,
     val readings: List<WhpuElectricityReading>,
@@ -53,7 +53,7 @@ class WhpuElectricityRepository(
                     currentCoroutineContext().ensureActive()
                     if (!isCurrent()) throw WhpuElectricityException.SessionChanged()
                     val previous = cached(room.owner)
-                    val reading = WhpuElectricityReading(room, result.balanceYuan, now())
+                    val reading = WhpuElectricityReading(room, result.value, now())
                     val readings = previous?.readings.orEmpty().filterNot { it.room == room } + reading
                     val cache = WhpuElectricityCache(room.owner, readings, room)
                     val target = key(room.owner)
@@ -101,20 +101,33 @@ class WhpuElectricityRepository(
         require(owner.id.toLongOrNull()?.let { it > 0 } == true)
         return "whpu-electricity:owner:${owner.id}"
     }
-    private fun KvCacheEntity.decode(): WhpuElectricityCache = Json.decodeFromString(ElectricityCacheSerializer, payload)
+    private fun KvCacheEntity.decode(): WhpuElectricityCache {
+        val cache = Json.decodeFromString(ElectricityCacheSerializer, payload)
+        return cache.copy(readings = cache.readings.map { reading ->
+            if (reading.room.feeItemId == WHPU_CHANGQING_JINHU_ELECTRICITY &&
+                reading.value.kind == WhpuElectricityReadingKind.SCHOOL_REMAINING) {
+                reading.copy(value = reading.value.copy(kind = WhpuElectricityReadingKind.YUAN))
+            } else reading
+        })
+    }
 
     companion object { internal const val ACTIVE_KEY = "whpu-electricity:active" }
 }
 
-/** Read rc8/rc9 integer-fen caches without changing their room selection or timestamps. */
+/** Older fen/yuan readings remain money; preserve their selection, timestamps and decimal precision. */
 private object ElectricityCacheSerializer : JsonTransformingSerializer<WhpuElectricityCache>(WhpuElectricityCache.serializer()) {
     override fun transformDeserialize(element: JsonElement): JsonElement {
         val cache = element.jsonObject
         val readings = cache.getValue("readings").jsonArray.map { value ->
             val reading = value.jsonObject
-            if ("balanceYuan" in reading) reading else {
-                val yuan = BigDecimal.valueOf(reading.getValue("balanceFen").jsonPrimitive.long, 2).toPlainString()
-                JsonObject(reading.filterKeys { it != "balanceFen" } + ("balanceYuan" to JsonPrimitive(yuan)))
+            if ("value" in reading) reading else {
+                val yuan = reading["balanceYuan"]?.jsonPrimitive?.content
+                    ?: BigDecimal.valueOf(reading.getValue("balanceFen").jsonPrimitive.long, 2).toPlainString()
+                val amount = buildJsonObject {
+                    put("number", yuan)
+                    put("kind", WhpuElectricityReadingKind.YUAN.name)
+                }
+                JsonObject(reading.filterKeys { it != "balanceFen" && it != "balanceYuan" } + ("value" to amount))
             }
         }
         return JsonObject(cache + ("readings" to JsonArray(readings)))

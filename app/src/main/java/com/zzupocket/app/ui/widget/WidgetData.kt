@@ -5,6 +5,9 @@ import com.zzupocket.app.core.AppGraph
 import com.zzupocket.app.data.prefs.UiPrefs
 import com.zzupocket.app.data.whpu.totals
 import com.zzupocket.app.data.whpu.WhpuElectricityReading
+import com.zzupocket.app.ui.campus.title
+import com.zzupocket.app.ui.campus.unit
+import com.zzupocket.app.ui.campus.unitNote
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 
@@ -79,8 +82,9 @@ data class WidgetBalanceBundle(
         return cardPlan.copy(
             update = WidgetBalance.updateLabel(listOfNotNull(cardAt, reading?.fetchedAt).minOrNull(), nowMillis),
             leftBlocks = listOf(
-                WidgetBlock("电费余额", reading?.balanceYuan ?: "未查询",
-                    if (reading == null) "" else "元", "", reading?.balanceYuan?.startsWith('-') == true),
+                WidgetBlock(reading?.value?.title ?: "电费查询", reading?.value?.number ?: "未查询",
+                    reading?.value?.unit.orEmpty(), reading?.value?.unitNote.orEmpty(),
+                    reading?.value?.number?.startsWith('-') == true),
                 WidgetBlock(if (reading == null) "选择房间" else "所选房间", "打开", "",
                     reading?.room?.steps?.lastOrNull()?.option?.name.orEmpty(), false),
             ),

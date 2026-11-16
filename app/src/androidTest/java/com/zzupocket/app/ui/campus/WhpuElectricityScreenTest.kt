@@ -15,8 +15,10 @@ import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import okhttp3.*
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.*
@@ -55,14 +57,14 @@ class WhpuElectricityScreenTest {
                 scenario.onActivity { activity -> activity.setContent {
                     MaterialTheme { WhpuElectricityScreen(onBack = {}, onLogin = { loginOpened.set(true) }, model = model) }
                 } }
-                awaitText("尚未保存电费余额")
+                awaitText("尚未保存电费查询结果")
                 click("选择房间"); awaitText("查询分组"); click("其他楼栋")
                 for (label in listOf("人工校区", "人工照明楼", "人工楼层", "人工房间")) {
                     awaitText(label); click(label)
                 }
-                awaitText("¥ 12.34"); awaitText("已保存电费余额")
+                awaitText("¥ 12.34"); awaitText("已保存电费查询结果")
                 val cache = repository.current()!!
-                assertEquals("12.34", cache.selected!!.balanceYuan)
+                assertEquals(WhpuElectricityValue("12.34", WhpuElectricityReadingKind.YUAN), cache.selected!!.value)
                 assertEquals(4, cache.selectedRoom!!.steps.size)
                 assertEquals("room-id&人工房间", cache.selectedRoom!!.steps.last().option.value)
                 assertEquals(5, requests.count { it.method == "POST" })
@@ -115,14 +117,14 @@ class WhpuElectricityScreenTest {
                 scenario.onActivity { activity -> activity.setContent {
                     MaterialTheme { WhpuElectricityScreen(onBack = {}, onLogin = {}, model = model) }
                 } }
-                awaitText("尚未保存电费余额")
+                awaitText("尚未保存电费查询结果")
                 click("选择房间"); awaitText("查询分组"); click("金银湖 6、7、8 栋照明")
                 awaitText("人工照明楼"); click("人工照明楼")
                 awaitText("人工楼层"); click("人工楼层")
                 awaitText("人工房间"); click("上一层")
                 awaitText("选择楼层"); click("人工楼层")
                 awaitText("人工房间"); click("人工房间")
-                awaitText("¥ 12.3456"); awaitText("已保存电费余额")
+                awaitText("¥ 12.3456"); awaitText("已保存电费查询结果")
 
                 val expected = listOf(
                     lightingForm("select", 0), lightingForm("select", 1), lightingForm("select", 2),
@@ -132,7 +134,7 @@ class WhpuElectricityScreenTest {
                 val cached = repository.current()!!
                 assertEquals(WHPU_JINYINHU_LIGHTING, cached.selectedRoom!!.feeItemId)
                 assertEquals(listOf("building", "floor", "room"), cached.selectedRoom!!.steps.map { it.field.code })
-                assertEquals("12.3456", cached.selected!!.balanceYuan)
+                assertEquals(WhpuElectricityValue("12.3456", WhpuElectricityReadingKind.YUAN), cached.selected!!.value)
 
                 failBalance.set(true)
                 click("刷新所选房间")
@@ -144,6 +146,118 @@ class WhpuElectricityScreenTest {
             withContext(Dispatchers.Main) { store.clear() }
             db.close(); context.deleteDatabase(name)
         }
+    }
+
+    @Test fun thirdGroupUsesNativeSelectionAndKeepsYuanCacheAfterReturnAndFailure() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "electricity-remaining-screen-${UUID.randomUUID()}.db"
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, name).build()
+        val session = WhpuCardSession().apply { accept("synthetic-token", userAgent = "test Android Mobile") }
+        val forms = CopyOnWriteArrayList<Map<String, String>>()
+        val failBalance = AtomicBoolean(false)
+        val loginOpened = AtomicBoolean(false)
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            val fields = (request.body as? FormBody)?.let { form ->
+                (0 until form.size).associate { form.name(it) to form.value(it) }.also { forms += it }
+            }
+            val failure = fields?.get("type") == "IEC" && failBalance.get()
+            val body = when {
+                fields == null -> """{"code":200,"success":true,"data":{"id":101}}"""
+                failure -> """{"code":503}"""
+                fields["type"] == "select" -> remainingDirectory(fields.getValue("level").toInt())
+                else -> remainingBalance
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                .code(if (failure) 503 else 200).message("fixture").body(body.toResponseBody()).build()
+        }.build()
+        val provider = WhpuElectricityProvider(session, client)
+        val repository = WhpuElectricityRepository(db, WhpuElectricitySource { provider.balance(it) }, session, now = { 1000L })
+        val store = ViewModelStore()
+        try {
+            val model = withContext(Dispatchers.Main) {
+                WhpuElectricityViewModel(repository, provider, session, onCacheChanged = {}).also { store.put("test", it) }
+            }
+            val expected = listOf(remainingForm("select", 0), remainingForm("select", 1),
+                remainingForm("select", 2), remainingForm("IEC", 3))
+            val cached = ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent {
+                    MaterialTheme { WhpuElectricityScreen(onBack = {}, onLogin = { loginOpened.set(true) }, model = model) }
+                } }
+                awaitText("尚未保存电费查询结果")
+                click("选择房间"); awaitText("查询分组"); click("常青 1 号楼、金湖 10、11 栋")
+                for (label in listOf("人工公寓", "人工楼层", "人工房间")) {
+                    awaitText(label); click(label)
+                }
+                awaitText("已保存电费查询结果")
+                assertThirdGroupYuanVisible()
+                assertFalse(loginOpened.get())
+                assertEquals(expected, forms.toList())
+                val cached = repository.current()!!
+                assertEquals(WHPU_CHANGQING_JINHU_ELECTRICITY, cached.selectedRoom!!.feeItemId)
+                assertEquals(listOf("campus", "building", "room"), cached.selectedRoom!!.steps.map { it.field.code })
+                assertEquals(listOf("11", "22", "33"), cached.selectedRoom!!.steps.map { it.option.value })
+                assertEquals(WhpuElectricityValue("12.345600", WhpuElectricityReadingKind.YUAN), cached.selected!!.value)
+                cached
+            }
+
+            // Close the original Activity and its composition before clearing its model, then
+            // open a fresh screen that reads the saved result without requesting the school.
+            val restored = withContext(Dispatchers.Main) {
+                store.clear()
+                WhpuElectricityViewModel(repository, provider, session, onCacheChanged = {}).also { store.put("restored", it) }
+            }
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent {
+                    MaterialTheme { WhpuElectricityScreen(onBack = {}, onLogin = { loginOpened.set(true) }, model = restored) }
+                } }
+                assertEquals(cached, withTimeout(5_000) { restored.cache.first { it?.selected != null } })
+                assertThirdGroupYuanVisible()
+                assertEquals(expected, forms.toList())
+                assertEquals(cached, repository.current())
+
+                failBalance.set(true)
+                click("刷新所选房间")
+                awaitText("电费服务暂不可用（HTTP 503）") {
+                    "forms=${forms.toList()}; restored message=${restored.message}, busy=${restored.busy}, " +
+                        "cache=${restored.cache.value}; original message=${model.message}, busy=${model.busy}"
+                }
+                assertThirdGroupYuanVisible()
+                assertEquals(expected + remainingForm("IEC", 3), forms.toList())
+                assertEquals(cached, repository.current())
+                assertFalse(loginOpened.get())
+            }
+        } finally {
+            withContext(Dispatchers.Main) { store.clear() }
+            db.close(); context.deleteDatabase(name)
+        }
+    }
+
+    private fun remainingForm(type: String, level: Int): Map<String, String> = buildMap {
+        put("feeitemid", WHPU_CHANGQING_JINHU_ELECTRICITY); put("type", type); put("level", level.toString())
+        listOf("campus" to "11", "building" to "22", "room" to "33").take(level).forEach { (code, id) -> put(code, id) }
+    }
+
+    private fun remainingDirectory(level: Int): String {
+        val fields = """{"code":"campus","name":"公寓","level":1},
+            {"code":"building","name":"楼层","level":2},{"code":"room","name":"房间","level":3}"""
+        val (id, name) = listOf("11" to "人工公寓", "22" to "人工楼层", "33" to "人工房间")[level]
+        return """{"code":200,"map":{"total":[$fields],"data":[{"name":"$name","value":"$id"}]}}"""
+    }
+
+    private val remainingBalance = """{"code":200,"map":{"showData":{"当前剩余电量":"12.345600"},"data":{
+        "campusid":"11","campus":"人工公寓","buildingid":"22","building":"人工楼层",
+        "roomid":"33","room":"人工房间"}}}"""
+
+    private fun assertThirdGroupYuanVisible() {
+        awaitText("电费余额"); awaitText("¥ 12.345600")
+        val root = InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow
+        assertNotNull(root)
+        try {
+            assertFalse(find(root, "学校未标注单位", false))
+            assertFalse(find(root, "当前剩余电量", false))
+            assertFalse(find(root, "度", false))
+        } finally { root.recycle() }
     }
 
     private fun lightingForm(type: String, level: Int): Map<String, String> = buildMap {
@@ -174,7 +288,7 @@ class WhpuElectricityScreenTest {
         "area":"campus-id","areaName":"人工校区","building":"building-id","buildingName":"人工照明楼",
         "floor":"floor-id","floorName":"人工楼层","room":"room-id","roomName":"人工房间"}}}"""
 
-    private fun awaitText(text: String) {
+    private fun awaitText(text: String, diagnostic: () -> String = { "" }) {
         repeat(100) {
             val root = InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow
             if (root != null) {
@@ -182,7 +296,7 @@ class WhpuElectricityScreenTest {
             }
             Thread.sleep(100)
         }
-        fail("Synthetic UI did not show $text")
+        fail("Synthetic UI did not show $text ${diagnostic()}")
     }
     private fun click(text: String) {
         val root = InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow

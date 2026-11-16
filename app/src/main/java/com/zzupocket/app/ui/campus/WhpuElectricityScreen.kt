@@ -77,7 +77,7 @@ class WhpuElectricityViewModel(
         repository.refresh(room) { revision == generation }
         if (revision == generation) {
             pickerOpen = false; picker = null
-            message = "已保存电费余额"
+            message = "已保存电费查询结果"
             refreshWidgets()
         }
     }
@@ -146,12 +146,12 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
                     TextButton(onClick = openSchool, enabled = !model.busy) { Text("学校登录 / 官方网页") }
                 }
                 model.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Text("显示学校返回的人民币余额；照明与空调分别选择。缴费请进入官方网页。",
+                Text("显示人民币余额；照明与空调分别选择。缴费请进入官方网页。",
                     style = MaterialTheme.typography.bodySmall)
             }
             val current = cache
             if (current == null || current.readings.isEmpty()) item {
-                Text("尚未保存电费余额", style = MaterialTheme.typography.titleMedium)
+                Text("尚未保存电费查询结果", style = MaterialTheme.typography.titleMedium)
                 Text("先在学校网页登录并返回，再选择自己的房间查询。")
             } else {
                 items(current.readings) { reading ->
@@ -160,7 +160,10 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
                             if (current.selectedRoom == reading.room) Text("当前选择", color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelLarge)
                             Text(reading.room.label, style = MaterialTheme.typography.titleMedium)
-                            Text("¥ ${reading.balanceYuan}", style = MaterialTheme.typography.headlineMedium)
+                            Text(reading.value.title, style = MaterialTheme.typography.labelLarge)
+                            Text(reading.value.formatted, style = MaterialTheme.typography.headlineMedium)
+                            if (reading.value.unitNote.isNotEmpty()) Text(reading.value.unitNote,
+                                style = MaterialTheme.typography.bodySmall)
                             Text("本地缓存 · 更新于 ${cardDateTime(reading.fetchedAt)}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -174,8 +177,8 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
             Button(onClick = { groups = false; model.startSelection() }, modifier = Modifier.fillMaxWidth()) { Text("其他楼栋") }
             Button(onClick = { groups = false; model.startSelection(WHPU_JINYINHU_LIGHTING) },
                 modifier = Modifier.fillMaxWidth()) { Text("金银湖 6、7、8 栋照明") }
-            Text("以下分组在学校网页查看剩余电量：", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { groups = false; openSchool() }) { Text("常青 1 号楼、金湖 10、11 栋") }
+            Button(onClick = { groups = false; model.startSelection(WHPU_CHANGQING_JINHU_ELECTRICITY) },
+                modifier = Modifier.fillMaxWidth()) { Text("常青 1 号楼、金湖 10、11 栋") }
         } }, confirmButton = { TextButton(onClick = { groups = false }) { Text("关闭") } })
 
     if (model.pickerOpen) {
@@ -203,7 +206,7 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
     }
     clearOwner?.let { owner ->
         AlertDialog(onDismissRequest = { clearOwner = null }, title = { Text("清除本地电费缓存？") },
-            text = { Text("删除该账号在本机保存的电费余额与房间选择，不影响校园卡、课表或学校账户中的绑定。") },
+            text = { Text("删除该账号在本机保存的电费查询结果与房间选择，不影响校园卡、课表或学校账户中的绑定。") },
             confirmButton = { TextButton(onClick = { clearOwner = null; model.clear(owner) }) { Text("清除") } },
             dismissButton = { TextButton(onClick = { clearOwner = null }) { Text("取消") } })
     }
