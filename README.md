@@ -16,7 +16,7 @@
 [![Release](https://img.shields.io/github/v/release/sky-initial/WHPU-campus?include_prereleases&style=flat&label=release)](../../releases)
 [![Android](https://img.shields.io/badge/Android-12%2B-3ddc84?style=flat&logo=android&logoColor=white)](#构建)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7f52ff?style=flat&logo=kotlin&logoColor=white)](#技术栈)
-[![Tests](https://img.shields.io/badge/rc12%20unit%20tests-589-brightgreen?style=flat)](docs/whpu-rc12-validation.md)
+[![Tests](https://img.shields.io/badge/rc13%20unit%20tests-589-brightgreen?style=flat)](docs/whpu-rc13-validation.md)
 
 > ⚠️ 本项目是非官方项目。
 > 接口来自公开网页的协议整理与社区项目经验，**随时可能失效或被学校调整**；
@@ -44,7 +44,7 @@
 
 - 装在手机上会走系统的"未知来源应用"授权；Flyme / MIUI 这类系统还需要在
   「设置 → 应用 → 权限」里给文件管理器或浏览器放行"安装未知应用"。
-- rc1 至 rc12 沿用同一发布签名；rc12 已验证正式 rc11 覆盖升级保留人工业务数据和设置。Debug 开发版签名不同，不能直接覆盖；卸载会删除本地数据，详见 [安装及更新](docs/whpu-release.md#安装及更新)。
+- rc1 至 rc13 沿用同一发布签名；rc13 已验证正式 rc12 覆盖升级保留人工业务数据和设置。Debug 开发版签名不同，不能直接覆盖；卸载会删除本地数据，详见 [安装及更新](docs/whpu-release.md#安装及更新)。
 
 
 ## 首次使用
