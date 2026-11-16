@@ -5,9 +5,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
-/** Public fee items with verified yuan results and room-context mappings. */
+/** Public fee items with verified result and room-context mappings. */
 const val WHPU_GENERAL_ELECTRICITY = "182"
 const val WHPU_JINYINHU_LIGHTING = "201"
+const val WHPU_CHANGQING_JINHU_ELECTRICITY = "1"
+
+@Serializable enum class WhpuElectricityReadingKind { YUAN, SCHOOL_REMAINING }
+@Serializable data class WhpuElectricityValue(val number: String, val kind: WhpuElectricityReadingKind)
 
 @Serializable data class WhpuElectricityLevel(val code: String, val name: String, val level: Int)
 @Serializable data class WhpuElectricityOption(val name: String, val value: String)
@@ -31,7 +35,7 @@ data class WhpuElectricityDirectorySnapshot(
     val steps: List<WhpuElectricityStep>,
     val directory: WhpuElectricityDirectory,
 )
-data class WhpuElectricitySnapshot(val sessionRevision: Long, val room: WhpuElectricityRoom, val balanceYuan: String)
+data class WhpuElectricitySnapshot(val sessionRevision: Long, val room: WhpuElectricityRoom, val value: WhpuElectricityValue)
 
 sealed class WhpuElectricityException(message: String) : Exception(message) {
     class SessionExpired : WhpuElectricityException("校园服务登录已失效，请重新登录")
@@ -39,7 +43,7 @@ sealed class WhpuElectricityException(message: String) : Exception(message) {
     class Network : WhpuElectricityException("电费网络请求失败，已有缓存保留")
     class Http(val code: Int) : WhpuElectricityException("电费服务暂不可用（HTTP $code）")
     class Business(val code: Int) : WhpuElectricityException("电费查询未成功（$code）")
-    class Unavailable : WhpuElectricityException("学校暂未返回该房间余额，已有缓存保留")
+    class Unavailable : WhpuElectricityException("学校暂未返回该房间查询结果，已有缓存保留")
     class Parse : WhpuElectricityException("电费数据无法完整解析，已有缓存保留")
 }
 
@@ -50,6 +54,12 @@ object WhpuElectricityParser {
         "floor" to ("floor" to "floorName"),
         "room" to ("room" to "roomName"),
     )
+    private val remainingContextFields = linkedMapOf(
+        "campus" to ("campusid" to "campus"),
+        "building" to ("buildingid" to "building"),
+        "room" to ("roomid" to "room"),
+    )
+    private val numberPattern = Regex("[+-]?\\d+(?:\\.\\d+)?")
     private data class BalanceProfile(val fields: Map<String, Pair<String, String>>, val pattern: Regex)
     private val profiles = mapOf(
         WHPU_GENERAL_ELECTRICITY to BalanceProfile(contextFields,
@@ -75,7 +85,7 @@ object WhpuElectricityParser {
         WhpuElectricityDirectory(levels, options)
     }
 
-    fun balance(body: String, room: WhpuElectricityRoom): String = parse {
+    fun balance(body: String, room: WhpuElectricityRoom): WhpuElectricityValue = parse {
         val context = requestContext(room)
         val map = response(body)
         if (map["showData"] == null || map["showData"] == JsonNull) {
@@ -86,24 +96,36 @@ object WhpuElectricityParser {
         }
         val data = map.getValue("data").jsonObject
         context.forEach { (key, value) -> require(data.text(key) == value) }
+        if (room.feeItemId == WHPU_CHANGQING_JINHU_ELECTRICITY) {
+            val reading = map.getValue("showData").jsonObject.getValue("当前剩余电量").jsonPrimitive
+            require(reading.isString && numberPattern.matches(reading.content))
+            return@parse WhpuElectricityValue(reading.content, WhpuElectricityReadingKind.SCHOOL_REMAINING)
+        }
         val text = map.getValue("showData").jsonObject.text("信息")
         val amount = requireNotNull(profiles.getValue(room.feeItemId).pattern.matchEntire(text)).groupValues[1]
         val yuan = BigDecimal(amount)
         if (room.feeItemId == WHPU_GENERAL_ELECTRICITY) yuan.movePointRight(2).longValueExact()
         val normalized = yuan.stripTrailingZeros()
-        normalized.setScale(maxOf(2, normalized.scale())).toPlainString()
+        WhpuElectricityValue(normalized.setScale(maxOf(2, normalized.scale())).toPlainString(),
+            WhpuElectricityReadingKind.YUAN)
     }
 
     internal fun requestContext(room: WhpuElectricityRoom): Map<String, String> = parse {
-        val fields = profiles.getValue(room.feeItemId).fields
+        val remaining = room.feeItemId == WHPU_CHANGQING_JINHU_ELECTRICITY
+        val fields = if (remaining) remainingContextFields else profiles.getValue(room.feeItemId).fields
         require(room.steps.map { it.field.code } == fields.keys.toList())
         require(room.steps.map { it.field.level } == (1..fields.size).toList())
         buildMap {
             room.steps.forEach { step ->
-                val parts = step.option.value.split('&', limit = 2)
-                require(parts.size == 2 && parts[0].isNotBlank() && parts[1] == step.option.name)
                 val (idKey, nameKey) = fields.getValue(step.field.code)
-                put(idKey, parts[0]); put(nameKey, parts[1])
+                if (remaining) {
+                    require(step.option.value.matches(Regex("[0-9]+")) && step.option.name.isNotBlank())
+                    put(idKey, step.option.value); put(nameKey, step.option.name)
+                } else {
+                    val parts = step.option.value.split('&', limit = 2)
+                    require(parts.size == 2 && parts[0].isNotBlank() && parts[1] == step.option.name)
+                    put(idKey, parts[0]); put(nameKey, parts[1])
+                }
             }
         }
     }

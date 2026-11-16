@@ -1,5 +1,6 @@
 package com.zzupocket.app.ui.widget
 
+import com.zzupocket.app.data.whpu.*
 import com.zzupocket.app.domain.EnergyStats
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -309,6 +310,7 @@ class WidgetBalanceTest {
     fun `生产快照没有电费缓存时提示选择房间`() {
         val plan = WidgetBalanceBundle(36.5, now, 3.2, 87.6, 5, now).plan()
         assertEquals("宿舍电费", plan.leftTitle)
+        assertEquals("电费查询", plan.leftBlocks[0].label)
         assertEquals("未查询", plan.leftBlocks[0].value)
         assertEquals("选择房间", plan.leftBlocks[1].label)
         assertEquals("36.50", plan.rightBlocks[0].value)
@@ -324,7 +326,8 @@ class WidgetBalanceTest {
                 com.zzupocket.app.data.whpu.WhpuElectricityOption("示例房间", "1&示例房间"))),
         )
         for (expected in listOf("0.00", "-1.23", "123.45", "12.3456", "-0.0001")) {
-            val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room, expected, now - 25 * hour)
+            val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room,
+                WhpuElectricityValue(expected, WhpuElectricityReadingKind.YUAN), now - 25 * hour)
             val plan = WidgetBalanceBundle(36.5, now, 3.2, 87.6, 5, now, reading).plan()
             assertEquals(expected, plan.leftBlocks[0].value)
             assertEquals("元", plan.leftBlocks[0].unit)
@@ -332,6 +335,34 @@ class WidgetBalanceTest {
             assertEquals("示例房间", plan.leftBlocks[1].hint)
             assertEquals("昨天 21:30", plan.update)
             assertTrue(plan.leftBlocks.none { it.unit == "度" || it.hint.contains("可用约") })
+        }
+    }
+
+    @Test
+    fun `学校剩余读数保留精度且不补货币或电量单位`() {
+        val room = WhpuElectricityRoom(WhpuCardOwner("101"), WHPU_CHANGQING_JINHU_ELECTRICITY,
+            listOf(
+                WhpuElectricityStep(WhpuElectricityLevel("campus", "公寓", 1), WhpuElectricityOption("人工公寓", "11")),
+                WhpuElectricityStep(WhpuElectricityLevel("building", "楼层", 2), WhpuElectricityOption("人工楼层", "22")),
+                WhpuElectricityStep(WhpuElectricityLevel("room", "房间", 3), WhpuElectricityOption("人工房间", "33")),
+            ))
+        for (number in listOf("12.3456", "0", "-0.0001")) {
+            val reading = WhpuElectricityReading(room,
+                WhpuElectricityValue(number, WhpuElectricityReadingKind.SCHOOL_REMAINING), now - 25 * hour)
+            val plan = WidgetBalanceBundle(36.5, now, 3.2, 87.6, 5, now, reading).plan()
+            assertEquals("当前剩余电量", plan.leftBlocks[0].label)
+            assertEquals(number, plan.leftBlocks[0].value)
+            assertEquals("", plan.leftBlocks[0].unit)
+            assertEquals("学校未标注单位", plan.leftBlocks[0].hint)
+            assertEquals("人工房间", plan.leftBlocks[1].hint)
+            assertEquals("昨天 21:30", plan.update)
+            assertTrue(plan.leftBlocks.all { block ->
+                listOf(block.label, block.value, block.unit, block.hint).none { text ->
+                    text.contains("¥") || text.contains("元") || text.contains("度") || text.contains("可用约")
+                }
+            })
+            assertEquals("36.50", plan.rightBlocks[0].value)
+            assertEquals("元", plan.rightBlocks[0].unit)
         }
     }
 

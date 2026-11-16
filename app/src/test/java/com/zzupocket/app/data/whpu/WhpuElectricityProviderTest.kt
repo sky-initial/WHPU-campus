@@ -42,7 +42,7 @@ class WhpuElectricityProviderTest {
     @Test fun balancePreservesCompositeValuesAsFormFieldsAndChecksOwnerTwice() = runTest {
         val requests = mutableListOf<Request>()
         val snapshot = WhpuElectricityProvider(session(), client { requests += it; 200 to response(it) }).balance(ElectricityFixture.room)
-        assertEquals("12.34", snapshot.balanceYuan)
+        assertEquals(WhpuElectricityValue("12.34", WhpuElectricityReadingKind.YUAN), snapshot.value)
         assertEquals(ElectricityFixture.room, snapshot.room)
         val form = fields(requests.single { it.method == "POST" }.body as FormBody)
         assertEquals("IEC", form["type"]); assertEquals("4", form["level"])
@@ -57,7 +57,7 @@ class WhpuElectricityProviderTest {
             requests += it
             200 to if (it.method == "GET") CardFixture.owner() else ElectricityFixture.lightingBalance("12.3456")
         }).balance(ElectricityFixture.lightingRoom)
-        assertEquals("12.3456", snapshot.balanceYuan)
+        assertEquals(WhpuElectricityValue("12.3456", WhpuElectricityReadingKind.YUAN), snapshot.value)
         assertEquals(ElectricityFixture.lightingRoom, snapshot.room)
         val post = requests.single { it.method == "POST" }
         assertEquals("/charge/feeitem/getThirdData", post.url.encodedPath)
@@ -88,10 +88,47 @@ class WhpuElectricityProviderTest {
         }
     }
 
-    @Test fun officialOnlyFeeItemCannotReachTheNativeMoneyRequest() = runTest {
+    @Test fun remainingBalanceUsesFee1NumericIdsAndPreservesTheOfficialReading() = runTest {
+        val requests = mutableListOf<Request>()
+        val snapshot = WhpuElectricityProvider(session(), client {
+            requests += it
+            200 to if (it.method == "GET") CardFixture.owner() else ElectricityFixture.remainingBalance()
+        }).balance(ElectricityFixture.remainingRoom)
+        assertEquals(WhpuElectricityValue("12.3400", WhpuElectricityReadingKind.SCHOOL_REMAINING), snapshot.value)
+        assertEquals(ElectricityFixture.remainingRoom, snapshot.room)
+        val post = requests.single { it.method == "POST" }
+        assertEquals("/charge/feeitem/getThirdData", post.url.encodedPath)
+        assertEquals(mapOf("feeitemid" to "1", "type" to "IEC", "level" to "3",
+            "campus" to "10001", "building" to "20002", "room" to "30003"), fields(post.body as FormBody))
+        assertEquals(listOf("GET", "POST", "GET"), requests.map { it.method })
+    }
+
+    @Test fun remainingDirectoryKeepsApartmentFloorRoomHierarchyAndNumericValues() = runTest {
+        val posts = mutableListOf<Map<String, String>>()
+        val provider = WhpuElectricityProvider(session(), client {
+            200 to if (it.method == "GET") CardFixture.owner() else {
+                posts += fields(it.body as FormBody)
+                ElectricityFixture.remainingDirectory()
+            }
+        })
+        for (level in listOf(0, 1, 2, 1)) {
+            val snapshot = provider.directory(feeItemId = WHPU_CHANGQING_JINHU_ELECTRICITY,
+                steps = ElectricityFixture.remainingRoom.steps.take(level), expectedOwner = WhpuCardOwner("101"))
+            assertEquals("1", snapshot.feeItemId)
+            assertEquals(ElectricityFixture.remainingLevels, snapshot.directory.levels)
+            val expected = mapOf("feeitemid" to "1", "type" to "select", "level" to level.toString()) +
+                ElectricityFixture.remainingRoom.steps.take(level).associate { it.field.code to it.option.value }
+            assertEquals(expected, posts.last())
+        }
+    }
+
+    @Test fun remainingGroupRejectsCompositeIdsBeforeMakingAnyRequest() = runTest {
         var requests = 0
         val provider = WhpuElectricityProvider(session(), client { requests++; 200 to response(it) })
-        assertTrue(runCatching { provider.balance(ElectricityFixture.officialOnlyRoom) }
+        val room = ElectricityFixture.remainingRoom.let { room ->
+            room.copy(steps = room.steps.map { it.copy(option = it.option.copy(value = "${it.option.value}&${it.option.name}")) })
+        }
+        assertTrue(runCatching { provider.balance(room) }
             .exceptionOrNull() is WhpuElectricityException.Parse)
         assertEquals(0, requests)
     }

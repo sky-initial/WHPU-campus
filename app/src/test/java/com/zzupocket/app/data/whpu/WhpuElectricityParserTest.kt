@@ -22,10 +22,14 @@ internal object ElectricityFixture {
             // Distinct building/floor identities detect an accidentally swapped mapping.
             WhpuElectricityStep(field, WhpuElectricityOption(name, "lighting-${field.code}&$name"))
         })
-    val officialOnlyRoom = WhpuElectricityRoom(WhpuCardOwner("101"), "1", listOf(
-        WhpuElectricityStep(WhpuElectricityLevel("campus", "公寓", 1), WhpuElectricityOption("示例公寓", "plain-apartment")),
-        WhpuElectricityStep(WhpuElectricityLevel("building", "楼层", 2), WhpuElectricityOption("示例楼层", "plain-floor")),
-        WhpuElectricityStep(WhpuElectricityLevel("room", "房间", 3), WhpuElectricityOption("示例房间", "plain-room")),
+    val remainingLevels = listOf(
+        WhpuElectricityLevel("campus", "公寓", 1), WhpuElectricityLevel("building", "楼层", 2),
+        WhpuElectricityLevel("room", "房间", 3),
+    )
+    val remainingRoom = WhpuElectricityRoom(WhpuCardOwner("101"), WHPU_CHANGQING_JINHU_ELECTRICITY, listOf(
+        WhpuElectricityStep(remainingLevels[0], WhpuElectricityOption("示例公寓", "10001")),
+        WhpuElectricityStep(remainingLevels[1], WhpuElectricityOption("示例楼层", "20002")),
+        WhpuElectricityStep(remainingLevels[2], WhpuElectricityOption("示例房间", "30003")),
     ))
     fun directory(fields: String = """{"code":"campus","name":"校区","level":1},
         {"code":"building","name":"楼栋","level":2},{"code":"floor","name":"楼层","level":3},
@@ -44,6 +48,13 @@ internal object ElectricityFixture {
         """{"code":200,"map":{"showData":{"信息":"当前房间当前剩余金额${amount}元"},"data":{
         "building":"lighting-building","buildingName":"示例照明楼",
         "floor":"lighting-floor","floorName":"示例二层","room":"lighting-room","roomName":"示例房间"}}}"""
+    fun remainingDirectory() = directory(fields = """{"code":"campus","name":"公寓","level":1},
+        {"code":"building","name":"楼层","level":2},{"code":"room","name":"房间","level":3}""",
+        options = """{"name":"示例公寓","value":"10001"}""")
+    fun remainingBalance(number: String = "12.3400") =
+        """{"code":200,"map":{"showData":{"当前剩余电量":"$number"},"data":{
+        "campusid":"10001","campus":"示例公寓","buildingid":"20002","building":"示例楼层",
+        "roomid":"30003","room":"示例房间"}}}"""
 }
 
 class WhpuElectricityParserTest {
@@ -83,7 +94,8 @@ class WhpuElectricityParserTest {
 
     @Test fun generalGroupKeepsCentPrecisionInNormalizedYuanIncludingZeroAndNegative() {
         for ((yuan, normalized) in mapOf("12.34" to "12.34", "0" to "0.00", "8.5" to "8.50", "-2.10" to "-2.10")) {
-            assertEquals(normalized, WhpuElectricityParser.balance(ElectricityFixture.balance(yuan), ElectricityFixture.room))
+            assertEquals(WhpuElectricityValue(normalized, WhpuElectricityReadingKind.YUAN),
+                WhpuElectricityParser.balance(ElectricityFixture.balance(yuan), ElectricityFixture.room))
         }
     }
 
@@ -96,7 +108,7 @@ class WhpuElectricityParserTest {
             "999999999999999999999999" to "999999999999999999999999.00",
             "999999999999999999999999.1234" to "999999999999999999999999.1234",
         )) {
-            assertEquals(normalized, WhpuElectricityParser.balance(
+            assertEquals(WhpuElectricityValue(normalized, WhpuElectricityReadingKind.YUAN), WhpuElectricityParser.balance(
                 ElectricityFixture.lightingBalance(yuan), ElectricityFixture.lightingRoom))
         }
     }
@@ -134,12 +146,50 @@ class WhpuElectricityParserTest {
             ElectricityFixture.lightingRoom.copy(steps = ElectricityFixture.lightingRoom.steps.dropLast(1))) }
     }
 
-    @Test fun officialOnlyGroupWithUnitlessElectricityNeverBecomesMoney() {
-        val body = """{"code":200,"map":{"showData":{"当前剩余电量":"12.34"},"data":{}}}"""
-        fails { WhpuElectricityParser.balance(body, ElectricityFixture.officialOnlyRoom) }
-        // Even a familiar amount template cannot authorize a different fee item's mapping.
+    @Test fun remainingGroupKeepsTheOfficialNumberWithoutAssigningAUnit() {
+        assertEquals(ElectricityFixture.remainingLevels,
+            WhpuElectricityParser.directory(ElectricityFixture.remainingDirectory()).levels)
+        for (number in listOf("12.3400", "0", "0.0000", "-0.0010", "999999999999999999999999.123456")) {
+            assertEquals(WhpuElectricityValue(number, WhpuElectricityReadingKind.SCHOOL_REMAINING),
+                WhpuElectricityParser.balance(ElectricityFixture.remainingBalance(number), ElectricityFixture.remainingRoom))
+        }
+    }
+
+    @Test fun remainingGroupRejectsChangedLabelsUnitsAndNonStringNumbers() {
+        for (number in listOf("12.34元", "12.34度", "NaN", "", "1e3", " 12.34 ")) {
+            fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance(number), ElectricityFixture.remainingRoom) }
+        }
+        for (value in listOf("12.3400", "null", "true", "{}", "[]")) {
+            fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance().replace("\"12.3400\"", value),
+                ElectricityFixture.remainingRoom) }
+        }
+        fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance().replace("当前剩余电量", "余额"),
+            ElectricityFixture.remainingRoom) }
+        fails { WhpuElectricityParser.balance(ElectricityFixture.lightingBalance(), ElectricityFixture.remainingRoom) }
+        // A familiar yuan template still cannot give another group's hierarchy the fee 1 mapping.
         fails { WhpuElectricityParser.balance(ElectricityFixture.lightingBalance(),
-            ElectricityFixture.lightingRoom.copy(feeItemId = "1")) }
+            ElectricityFixture.lightingRoom.copy(feeItemId = WHPU_CHANGQING_JINHU_ELECTRICITY)) }
+    }
+
+    @Test fun remainingGroupChecksEachNumericIdAndNameIndependently() {
+        for (value in listOf("10001", "20002", "30003", "示例公寓", "示例楼层", "示例房间")) {
+            fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance().replace(value, "other-$value"),
+                ElectricityFixture.remainingRoom) }
+        }
+        val swapped = ElectricityFixture.remainingBalance().replace("10001", "temporary")
+            .replace("20002", "10001").replace("temporary", "20002")
+        fails { WhpuElectricityParser.balance(swapped, ElectricityFixture.remainingRoom) }
+    }
+
+    @Test fun remainingGroupRequiresCompleteHierarchyAndPureNumericSelectionIds() {
+        val room = ElectricityFixture.remainingRoom
+        for (value in listOf("30003&示例房间", "room-30003", "", "3.0", "-30003", " 30003")) {
+            val badSteps = room.steps.dropLast(1) + room.steps.last().let { it.copy(option = it.option.copy(value = value)) }
+            fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance(), room.copy(steps = badSteps)) }
+        }
+        fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance(), room.copy(steps = room.steps.dropLast(1))) }
+        fails { WhpuElectricityParser.balance(ElectricityFixture.remainingBalance(),
+            ElectricityFixture.room.copy(feeItemId = WHPU_CHANGQING_JINHU_ELECTRICITY)) }
     }
 
     @Test fun unknownUnitsOrTextNeverBecomeZeroOrElectricity() {
@@ -166,7 +216,7 @@ class WhpuElectricityParserTest {
         val room = original.copy(steps = original.steps.map { step ->
             if (step.field.code == "room") step.copy(option = WhpuElectricityOption("示例&房间", "test-room&示例&房间")) else step
         })
-        assertEquals("12.34", WhpuElectricityParser.balance(
+        assertEquals(WhpuElectricityValue("12.34", WhpuElectricityReadingKind.YUAN), WhpuElectricityParser.balance(
             ElectricityFixture.balance().replace("示例房间", "示例&房间"), room))
     }
 

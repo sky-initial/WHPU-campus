@@ -116,17 +116,19 @@
                         android:layout_height="1dp"
                         android:layout_weight="1" />
 
-                    <TextView
-                        android:id="@+id/hint_1"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:includeFontPadding="false"
-                        android:maxLines="1"
-                        android:text="@string/widget_preview_days_left"
-                        android:textColor="@color/widget_text_hint"
-                        android:textSize="@dimen/widget_block_hint" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/hint_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="@string/widget_preview_days_left"
+                    android:textColor="@color/widget_text_hint"
+                    android:textSize="@dimen/widget_block_hint" />
             </LinearLayout>
 
             <TextView
