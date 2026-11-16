@@ -42,13 +42,58 @@ class WhpuElectricityProviderTest {
     @Test fun balancePreservesCompositeValuesAsFormFieldsAndChecksOwnerTwice() = runTest {
         val requests = mutableListOf<Request>()
         val snapshot = WhpuElectricityProvider(session(), client { requests += it; 200 to response(it) }).balance(ElectricityFixture.room)
-        assertEquals(1234L, snapshot.balanceFen)
+        assertEquals("12.34", snapshot.balanceYuan)
         assertEquals(ElectricityFixture.room, snapshot.room)
         val form = fields(requests.single { it.method == "POST" }.body as FormBody)
         assertEquals("IEC", form["type"]); assertEquals("4", form["level"])
         assertEquals("test-room&示例房间", form["room"])
         assertEquals(7, form.size)
         assertEquals(2, requests.count { it.url.encodedPath == "/berserker-base/user" })
+    }
+
+    @Test fun lightingBalanceUsesFee201AndExactlyThreeSelectionFields() = runTest {
+        val requests = mutableListOf<Request>()
+        val snapshot = WhpuElectricityProvider(session(), client {
+            requests += it
+            200 to if (it.method == "GET") CardFixture.owner() else ElectricityFixture.lightingBalance("12.3456")
+        }).balance(ElectricityFixture.lightingRoom)
+        assertEquals("12.3456", snapshot.balanceYuan)
+        assertEquals(ElectricityFixture.lightingRoom, snapshot.room)
+        val post = requests.single { it.method == "POST" }
+        assertEquals("/charge/feeitem/getThirdData", post.url.encodedPath)
+        assertEquals(mapOf("feeitemid" to "201", "type" to "IEC", "level" to "3",
+            "building" to "lighting-building&示例照明楼", "floor" to "lighting-floor&示例二层",
+            "room" to "lighting-room&示例房间"), fields(post.body as FormBody))
+        assertEquals(listOf("GET", "POST", "GET"), requests.map { it.method })
+    }
+
+    @Test fun lightingDirectoryRetainsItsFeeItemForInitialForwardAndPreviousLevel() = runTest {
+        val posts = mutableListOf<Map<String, String>>()
+        val provider = WhpuElectricityProvider(session(), client {
+            200 to if (it.method == "GET") CardFixture.owner() else {
+                posts += fields(it.body as FormBody)
+                ElectricityFixture.lightingDirectory()
+            }
+        })
+        for (level in listOf(0, 1, 2, 1)) {
+            val snapshot = provider.directory(feeItemId = WHPU_JINYINHU_LIGHTING,
+                steps = ElectricityFixture.lightingRoom.steps.take(level),
+                expectedOwner = WhpuCardOwner("101"))
+            assertEquals("201", snapshot.feeItemId)
+            assertEquals(ElectricityFixture.lightingLevels, snapshot.directory.levels)
+            assertEquals(level, snapshot.steps.size)
+            val expected = mapOf("feeitemid" to "201", "type" to "select", "level" to level.toString()) +
+                ElectricityFixture.lightingRoom.steps.take(level).associate { it.field.code to it.option.value }
+            assertEquals(expected, posts.last())
+        }
+    }
+
+    @Test fun officialOnlyFeeItemCannotReachTheNativeMoneyRequest() = runTest {
+        var requests = 0
+        val provider = WhpuElectricityProvider(session(), client { requests++; 200 to response(it) })
+        assertTrue(runCatching { provider.balance(ElectricityFixture.officialOnlyRoom) }
+            .exceptionOrNull() is WhpuElectricityException.Parse)
+        assertEquals(0, requests)
     }
 
     @Test fun newAccountCannotQueryPreviouslySelectedRoom() = runTest {

@@ -323,12 +323,12 @@ class WidgetBalanceTest {
                 com.zzupocket.app.data.whpu.WhpuElectricityLevel("room", "房间", 4),
                 com.zzupocket.app.data.whpu.WhpuElectricityOption("示例房间", "1&示例房间"))),
         )
-        for ((fen, expected) in listOf(0L to "0.00", -123L to "-1.23", 12345L to "123.45")) {
-            val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room, fen, now - 25 * hour)
+        for (expected in listOf("0.00", "-1.23", "123.45", "12.3456", "-0.0001")) {
+            val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room, expected, now - 25 * hour)
             val plan = WidgetBalanceBundle(36.5, now, 3.2, 87.6, 5, now, reading).plan()
             assertEquals(expected, plan.leftBlocks[0].value)
             assertEquals("元", plan.leftBlocks[0].unit)
-            assertEquals(fen < 0, plan.leftBlocks[0].alert)
+            assertEquals(expected.startsWith('-'), plan.leftBlocks[0].alert)
             assertEquals("示例房间", plan.leftBlocks[1].hint)
             assertEquals("昨天 21:30", plan.update)
             assertTrue(plan.leftBlocks.none { it.unit == "度" || it.hint.contains("可用约") })

@@ -83,22 +83,24 @@ class WidgetBalanceRenderingTest {
         instrumentation.runOnMainSync {
             for (mode in listOf(DarkMode.LIGHT, DarkMode.DARK)) {
                 for (width in listOf(250, 340)) {
-                    val colors = WidgetStyle.colors(context, UiPrefs(darkMode = mode))
-                    val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room, -123L, 0L)
-                    val plan = WidgetBalanceBundle(null, null, null, null, null, 0L, reading).plan()
-                    val view = EnergyCardWidget.build(context, plan, colors,
-                        Widgets.openApp(context, AppRoutes.ELECTRICITY),
-                        Widgets.openApp(context, AppRoutes.CARD),
-                        Widgets.openApp(context, AppRoutes.TODAY), 165).apply(context, null)
-                    layout(view, width, 165)
-                    val value = view.findViewById<TextView>(R.id.value_1)
-                    assertEquals("-1.23", value.text.toString())
-                    assertTrue(value.paint.measureText(value.text.toString()) <= value.width)
-                    assertTrue(value.height >= value.layout.height)
-                    assertNotEquals(colors.bg, value.currentTextColor)
-                    assertEquals("元", view.findViewById<TextView>(R.id.unit_1).text.toString())
-                    assertEquals("示例房间", view.findViewById<TextView>(R.id.hint_2).text.toString())
-                    assertFalse(textViews(view).any { it.text.contains("度") || it.text.contains("可用约") })
+                    for ((feeItemId, amount) in listOf("182" to "-1.23", "201" to "12.3456", "201" to "-0.0001")) {
+                        val colors = WidgetStyle.colors(context, UiPrefs(darkMode = mode))
+                        val reading = com.zzupocket.app.data.whpu.WhpuElectricityReading(room.copy(feeItemId = feeItemId), amount, 0L)
+                        val plan = WidgetBalanceBundle(null, null, null, null, null, 0L, reading).plan()
+                        val view = EnergyCardWidget.build(context, plan, colors,
+                            Widgets.openApp(context, AppRoutes.ELECTRICITY),
+                            Widgets.openApp(context, AppRoutes.CARD),
+                            Widgets.openApp(context, AppRoutes.TODAY), 165).apply(context, null)
+                        layout(view, width, 165)
+                        val value = view.findViewById<TextView>(R.id.value_1)
+                        assertEquals(amount, value.text.toString())
+                        assertTrue(value.paint.measureText(value.text.toString()) <= value.width)
+                        assertTrue(value.height >= value.layout.height)
+                        assertNotEquals(colors.bg, value.currentTextColor)
+                        assertEquals("元", view.findViewById<TextView>(R.id.unit_1).text.toString())
+                        assertEquals("示例房间", view.findViewById<TextView>(R.id.hint_2).text.toString())
+                        assertFalse(textViews(view).any { it.text.contains("度") || it.text.contains("可用约") })
+                    }
                 }
             }
         }

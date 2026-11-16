@@ -42,14 +42,14 @@ class WhpuElectricityViewModel(
     private var generation = 0L
     private var job: Job? = null
 
-    fun startSelection() {
+    fun startSelection(feeItemId: String = WHPU_GENERAL_ELECTRICITY) {
         pickerOpen = true; picker = null
-        loadDirectory(emptyList(), null)
+        loadDirectory(feeItemId, emptyList(), null)
     }
 
     fun previousLevel() {
         val current = picker ?: return
-        if (!busy && current.steps.isNotEmpty()) loadDirectory(current.steps.dropLast(1), current.owner)
+        if (!busy && current.steps.isNotEmpty()) loadDirectory(current.feeItemId, current.steps.dropLast(1), current.owner)
     }
 
     fun choose(option: WhpuElectricityOption) {
@@ -57,12 +57,12 @@ class WhpuElectricityViewModel(
         if (busy || option !in current.directory.options) return
         val field = current.directory.levels[current.steps.size]
         val steps = current.steps + WhpuElectricityStep(field, option)
-        if (steps.size < current.directory.levels.size) loadDirectory(steps, current.owner)
+        if (steps.size < current.directory.levels.size) loadDirectory(current.feeItemId, steps, current.owner)
         else refresh(WhpuElectricityRoom(current.owner, current.feeItemId, steps))
     }
 
-    private fun loadDirectory(steps: List<WhpuElectricityStep>, owner: WhpuCardOwner?) = request { revision ->
-        val result = provider.directory(steps = steps, expectedOwner = owner)
+    private fun loadDirectory(feeItemId: String, steps: List<WhpuElectricityStep>, owner: WhpuCardOwner?) = request { revision ->
+        val result = provider.directory(feeItemId = feeItemId, steps = steps, expectedOwner = owner)
         session.withCurrent(result.sessionRevision) {
             if (revision != generation) throw CancellationException()
             repository.acceptOwner(result.owner)
@@ -160,7 +160,7 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
                             if (current.selectedRoom == reading.room) Text("当前选择", color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelLarge)
                             Text(reading.room.label, style = MaterialTheme.typography.titleMedium)
-                            Text("¥ ${cardMoney(reading.balanceFen)}", style = MaterialTheme.typography.headlineMedium)
+                            Text("¥ ${reading.balanceYuan}", style = MaterialTheme.typography.headlineMedium)
                             Text("本地缓存 · 更新于 ${cardDateTime(reading.fetchedAt)}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -172,8 +172,9 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
     if (groups) AlertDialog(onDismissRequest = { groups = false }, title = { Text("查询分组") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { groups = false; model.startSelection() }, modifier = Modifier.fillMaxWidth()) { Text("其他楼栋") }
-            Text("以下分组请在学校网页查询：", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { groups = false; openSchool() }) { Text("金银湖 6、7、8 栋照明") }
+            Button(onClick = { groups = false; model.startSelection(WHPU_JINYINHU_LIGHTING) },
+                modifier = Modifier.fillMaxWidth()) { Text("金银湖 6、7、8 栋照明") }
+            Text("以下分组在学校网页查看剩余电量：", style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { groups = false; openSchool() }) { Text("常青 1 号楼、金湖 10、11 栋") }
         } }, confirmButton = { TextButton(onClick = { groups = false }) { Text("关闭") } })
 
