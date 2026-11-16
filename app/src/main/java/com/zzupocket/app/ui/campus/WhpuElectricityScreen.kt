@@ -3,6 +3,8 @@ package com.zzupocket.app.ui.campus
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -173,13 +175,8 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
         }
     }
     if (groups) AlertDialog(onDismissRequest = { groups = false }, title = { Text("查询分组") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { groups = false; model.startSelection() }, modifier = Modifier.fillMaxWidth()) { Text("其他楼栋") }
-            Button(onClick = { groups = false; model.startSelection(WHPU_JINYINHU_LIGHTING) },
-                modifier = Modifier.fillMaxWidth()) { Text("金银湖 6、7、8 栋照明") }
-            Button(onClick = { groups = false; model.startSelection(WHPU_CHANGQING_JINHU_ELECTRICITY) },
-                modifier = Modifier.fillMaxWidth()) { Text("常青 1 号楼、金湖 10、11 栋") }
-        } }, confirmButton = { TextButton(onClick = { groups = false }) { Text("关闭") } })
+        text = { ElectricityGroupOptions { feeItemId -> groups = false; model.startSelection(feeItemId) } },
+        confirmButton = { TextButton(onClick = { groups = false }) { Text("关闭") } })
 
     if (model.pickerOpen) {
         val current = model.picker
@@ -209,5 +206,14 @@ fun WhpuElectricityScreen(onBack: () -> Unit, onLogin: () -> Unit, model: WhpuEl
             text = { Text("删除该账号在本机保存的电费查询结果与房间选择，不影响校园卡、课表或学校账户中的绑定。") },
             confirmButton = { TextButton(onClick = { clearOwner = null; model.clear(owner) }) { Text("清除") } },
             dismissButton = { TextButton(onClick = { clearOwner = null }) { Text("取消") } })
+    }
+}
+
+@Composable
+internal fun ElectricityGroupOptions(onSelect: (String) -> Unit) {
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = { onSelect(WHPU_GENERAL_ELECTRICITY) }, modifier = Modifier.fillMaxWidth()) { Text("其他楼栋") }
+        Button(onClick = { onSelect(WHPU_JINYINHU_LIGHTING) }, modifier = Modifier.fillMaxWidth()) { Text("金银湖 6、7、8 栋照明") }
+        Button(onClick = { onSelect(WHPU_CHANGQING_JINHU_ELECTRICITY) }, modifier = Modifier.fillMaxWidth()) { Text("常青 1 号楼、金湖 10、11 栋") }
     }
 }
