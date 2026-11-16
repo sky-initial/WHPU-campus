@@ -5,8 +5,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
-/** Verified public fee item. Other school groups remain available through the official page. */
+/** Public fee items with verified yuan results and room-context mappings. */
 const val WHPU_GENERAL_ELECTRICITY = "182"
+const val WHPU_JINYINHU_LIGHTING = "201"
 
 @Serializable data class WhpuElectricityLevel(val code: String, val name: String, val level: Int)
 @Serializable data class WhpuElectricityOption(val name: String, val value: String)
@@ -30,7 +31,7 @@ data class WhpuElectricityDirectorySnapshot(
     val steps: List<WhpuElectricityStep>,
     val directory: WhpuElectricityDirectory,
 )
-data class WhpuElectricitySnapshot(val sessionRevision: Long, val room: WhpuElectricityRoom, val balanceFen: Long)
+data class WhpuElectricitySnapshot(val sessionRevision: Long, val room: WhpuElectricityRoom, val balanceYuan: String)
 
 sealed class WhpuElectricityException(message: String) : Exception(message) {
     class SessionExpired : WhpuElectricityException("校园服务登录已失效，请重新登录")
@@ -43,12 +44,18 @@ sealed class WhpuElectricityException(message: String) : Exception(message) {
 }
 
 object WhpuElectricityParser {
-    private val balancePattern = Regex("当前房间余额为([+-]?\\d+(?:\\.\\d+)?)元")
     private val contextFields = linkedMapOf(
         "campus" to ("area" to "areaName"),
         "building" to ("building" to "buildingName"),
         "floor" to ("floor" to "floorName"),
         "room" to ("room" to "roomName"),
+    )
+    private data class BalanceProfile(val fields: Map<String, Pair<String, String>>, val pattern: Regex)
+    private val profiles = mapOf(
+        WHPU_GENERAL_ELECTRICITY to BalanceProfile(contextFields,
+            Regex("当前房间余额为([+-]?\\d+(?:\\.\\d+)?)元")),
+        WHPU_JINYINHU_LIGHTING to BalanceProfile(contextFields.filterKeys { it != "campus" },
+            Regex("当前房间当前剩余金额([+-]?\\d+(?:\\.\\d+)?)元")),
     )
 
     fun directory(body: String): WhpuElectricityDirectory = parse {
@@ -68,7 +75,7 @@ object WhpuElectricityParser {
         WhpuElectricityDirectory(levels, options)
     }
 
-    fun balance(body: String, room: WhpuElectricityRoom): Long = parse {
+    fun balance(body: String, room: WhpuElectricityRoom): String = parse {
         val context = requestContext(room)
         val map = response(body)
         if (map["showData"] == null || map["showData"] == JsonNull) {
@@ -80,19 +87,22 @@ object WhpuElectricityParser {
         val data = map.getValue("data").jsonObject
         context.forEach { (key, value) -> require(data.text(key) == value) }
         val text = map.getValue("showData").jsonObject.text("信息")
-        val amount = requireNotNull(balancePattern.matchEntire(text)).groupValues[1]
-        BigDecimal(amount).movePointRight(2).longValueExact()
+        val amount = requireNotNull(profiles.getValue(room.feeItemId).pattern.matchEntire(text)).groupValues[1]
+        val yuan = BigDecimal(amount)
+        if (room.feeItemId == WHPU_GENERAL_ELECTRICITY) yuan.movePointRight(2).longValueExact()
+        val normalized = yuan.stripTrailingZeros()
+        normalized.setScale(maxOf(2, normalized.scale())).toPlainString()
     }
 
     internal fun requestContext(room: WhpuElectricityRoom): Map<String, String> = parse {
-        require(room.feeItemId == WHPU_GENERAL_ELECTRICITY)
-        require(room.steps.map { it.field.code } == contextFields.keys.toList())
-        require(room.steps.map { it.field.level } == listOf(1, 2, 3, 4))
+        val fields = profiles.getValue(room.feeItemId).fields
+        require(room.steps.map { it.field.code } == fields.keys.toList())
+        require(room.steps.map { it.field.level } == (1..fields.size).toList())
         buildMap {
             room.steps.forEach { step ->
                 val parts = step.option.value.split('&', limit = 2)
                 require(parts.size == 2 && parts[0].isNotBlank() && parts[1] == step.option.name)
-                val (idKey, nameKey) = contextFields.getValue(step.field.code)
+                val (idKey, nameKey) = fields.getValue(step.field.code)
                 put(idKey, parts[0]); put(nameKey, parts[1])
             }
         }

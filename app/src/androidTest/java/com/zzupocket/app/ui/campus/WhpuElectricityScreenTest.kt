@@ -62,7 +62,7 @@ class WhpuElectricityScreenTest {
                 }
                 awaitText("¥ 12.34"); awaitText("已保存电费余额")
                 val cache = repository.current()!!
-                assertEquals(1234L, cache.selected!!.balanceFen)
+                assertEquals("12.34", cache.selected!!.balanceYuan)
                 assertEquals(4, cache.selectedRoom!!.steps.size)
                 assertEquals("room-id&人工房间", cache.selectedRoom!!.steps.last().option.value)
                 assertEquals(5, requests.count { it.method == "POST" })
@@ -81,6 +81,87 @@ class WhpuElectricityScreenTest {
             db.close(); context.deleteDatabase(name)
         }
     }
+
+    @Test fun lightingGroupKeepsItsIdentityWhenReturningToPreviousLevelAndRefreshing() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "electricity-lighting-screen-${UUID.randomUUID()}.db"
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, name).build()
+        val session = WhpuCardSession().apply { accept("synthetic-token", userAgent = "test Android Mobile") }
+        val forms = CopyOnWriteArrayList<Map<String, String>>()
+        val failBalance = AtomicBoolean(false)
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            val fields = (request.body as? FormBody)?.let { form ->
+                (0 until form.size).associate { form.name(it) to form.value(it) }.also { forms += it }
+            }
+            val failure = fields?.get("type") == "IEC" && failBalance.get()
+            val body = when {
+                fields == null -> """{"code":200,"success":true,"data":{"id":101}}"""
+                failure -> """{"code":503}"""
+                fields["type"] == "select" -> lightingDirectory(fields.getValue("level").toInt())
+                else -> lightingBalance
+            }
+            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                .code(if (failure) 503 else 200).message("fixture").body(body.toResponseBody()).build()
+        }.build()
+        val provider = WhpuElectricityProvider(session, client)
+        val repository = WhpuElectricityRepository(db, WhpuElectricitySource { provider.balance(it) }, session, now = { 1000L })
+        val store = ViewModelStore()
+        try {
+            val model = withContext(Dispatchers.Main) {
+                WhpuElectricityViewModel(repository, provider, session, onCacheChanged = {}).also { store.put("test", it) }
+            }
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.onActivity { activity -> activity.setContent {
+                    MaterialTheme { WhpuElectricityScreen(onBack = {}, onLogin = {}, model = model) }
+                } }
+                awaitText("尚未保存电费余额")
+                click("选择房间"); awaitText("查询分组"); click("金银湖 6、7、8 栋照明")
+                awaitText("人工照明楼"); click("人工照明楼")
+                awaitText("人工楼层"); click("人工楼层")
+                awaitText("人工房间"); click("上一层")
+                awaitText("选择楼层"); click("人工楼层")
+                awaitText("人工房间"); click("人工房间")
+                awaitText("¥ 12.3456"); awaitText("已保存电费余额")
+
+                val expected = listOf(
+                    lightingForm("select", 0), lightingForm("select", 1), lightingForm("select", 2),
+                    lightingForm("select", 1), lightingForm("select", 2), lightingForm("IEC", 3),
+                )
+                assertEquals(expected, forms.toList())
+                val cached = repository.current()!!
+                assertEquals(WHPU_JINYINHU_LIGHTING, cached.selectedRoom!!.feeItemId)
+                assertEquals(listOf("building", "floor", "room"), cached.selectedRoom!!.steps.map { it.field.code })
+                assertEquals("12.3456", cached.selected!!.balanceYuan)
+
+                failBalance.set(true)
+                click("刷新所选房间")
+                awaitText("电费服务暂不可用（HTTP 503）"); awaitText("¥ 12.3456")
+                assertEquals(expected + lightingForm("IEC", 3), forms.toList())
+                assertEquals(cached, repository.current())
+            }
+        } finally {
+            withContext(Dispatchers.Main) { store.clear() }
+            db.close(); context.deleteDatabase(name)
+        }
+    }
+
+    private fun lightingForm(type: String, level: Int): Map<String, String> = buildMap {
+        put("feeitemid", WHPU_JINYINHU_LIGHTING); put("type", type); put("level", level.toString())
+        listOf("building" to "人工照明楼", "floor" to "人工楼层", "room" to "人工房间")
+            .take(level).forEach { (code, label) -> put(code, "$code-id&$label") }
+    }
+
+    private fun lightingDirectory(level: Int): String {
+        val fields = """{"code":"building","name":"楼栋","level":1},
+            {"code":"floor","name":"楼层","level":2},{"code":"room","name":"房间","level":3}"""
+        val (code, name) = listOf("building" to "人工照明楼", "floor" to "人工楼层", "room" to "人工房间")[level]
+        return """{"code":200,"map":{"total":[$fields],"data":[{"name":"$name","value":"$code-id&$name"}]}}"""
+    }
+
+    private val lightingBalance = """{"code":200,"map":{"showData":{"信息":"当前房间当前剩余金额12.3456元"},"data":{
+        "building":"building-id","buildingName":"人工照明楼","floor":"floor-id","floorName":"人工楼层",
+        "room":"room-id","roomName":"人工房间"}}}"""
 
     private fun directory(level: Int): String {
         val codes = listOf("campus", "building", "floor", "room")

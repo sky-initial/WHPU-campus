@@ -157,7 +157,7 @@ fun TodayScreen(
                     if (reading == null) Text("选择房间后查询余额 · 官方网页可用")
                     else {
                         Text(reading.room.label, style = MaterialTheme.typography.bodyMedium)
-                        Text("¥ ${com.zzupocket.app.data.whpu.cardMoney(reading.balanceFen)}", style = MaterialTheme.typography.headlineSmall)
+                        Text("¥ ${reading.balanceYuan}", style = MaterialTheme.typography.headlineSmall)
                         Text("本地缓存 · 更新于 ${com.zzupocket.app.data.whpu.cardDateTime(reading.fetchedAt)}",
                             style = MaterialTheme.typography.bodySmall)
                     }
