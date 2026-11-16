@@ -57,7 +57,7 @@ Android 官方说明，加载过程中修改 User-Agent 会触发重新加载，
 
 用户授权房间的照明和空调均经官方选择器查询成功。房间选定后，官方页面直接请求 `type=IEC`、`level=4`，携带 `feeitemid,campus,building,floor,room`；没有额外发送一次 `type=select,level=4`。成功响应为 `code=200`、`map.showData.信息` 字符串，以及 `map.data` 的房间上下文。
 
-两项结果的脱敏显示模板均为 **当前房间余额为<数值>元**。官方前端将 `showData` 赋给 `aboutEleric.electricInfo` 后展示；实际页面与响应一致。只确认此分组和本次两项结果为人民币金额，不换算为电量，不用充值金额推算余额。其他分组的金额格式尚未实查。
+两项结果的脱敏显示模板均为 **当前房间余额为<数值>元**。官方前端将 `showData` 赋给 `aboutEleric.electricInfo` 后展示；实际页面与响应一致。此阶段只确认该分组和两项结果为人民币金额，不换算为电量，不用充值金额推算余额。其他分组当时尚未实查，后续成功查询及单位证据见末节。
 
 `map.data` 观察到 `area,buildingName,areaName,floorName,floor,aid,account,building,room,roomName`，不能把其中 `account` 默认当成校园卡账号。原生查询仍须单独确认登录身份与选择路径的归属。
 
