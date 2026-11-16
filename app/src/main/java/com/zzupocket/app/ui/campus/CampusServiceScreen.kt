@@ -41,6 +41,7 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    private var pageErrorUrl: String? = null
     var canGoBack by mutableStateOf(false)
         private set
     private var cancelViewportFix: (() -> Unit)? = null
@@ -82,7 +83,10 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 if (!request.isForMainFrame) return false
-                if (service.allows(request.url.toString())) return false
+                if (service.allows(request.url.toString())) {
+                    beginNavigation()
+                    return false
+                }
                 error = "该跳转暂不支持在应用内打开（${WhpuWebPolicy.navigationOrigin(request.url.toString())}）。可在浏览器中从官方入口继续。"
                 loading = false
                 return true
@@ -94,11 +98,13 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
                 if (!service.allows(url)) {
                     view.stopLoading()
                     loading = false
+                    pageErrorUrl = url
                     error = "该页面暂不支持在应用内打开，请使用浏览器入口。"
                     return
                 }
-                loading = true
-                error = null
+                // A main-document HTTP error can arrive before onPageStarted.
+                if (pageErrorUrl != url) { error = null; pageErrorUrl = null }
+                loading = error == null
             }
             override fun onPageFinished(view: WebView, url: String) {
                 loading = false
@@ -114,17 +120,23 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, sslError: android.net.http.SslError) {
                 handler.cancel()
                 loading = false
+                cardReady = false
+                pageErrorUrl = sslError.url
                 error = "无法验证学校页面的安全连接，请稍后重试。"
             }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: WebResourceError) {
                 if (request.isForMainFrame) {
                     loading = false
+                    cardReady = false
+                    pageErrorUrl = request.url.toString()
                     error = "页面加载失败，请检查网络后重试。"
                 }
             }
             override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
                 if (request.isForMainFrame) {
                     loading = false
+                    cardReady = false
+                    pageErrorUrl = request.url.toString()
                     error = "学校服务返回 ${response.statusCode}，可返回入口或稍后重试。"
                 }
             }
@@ -145,6 +157,8 @@ class CampusWebViewModel(context: Context, val service: WhpuCampusService) : Vie
     private fun beginNavigation() {
         navigationRevision++
         cardReady = false
+        error = null
+        pageErrorUrl = null
     }
     fun retry() { beginNavigation(); webView.reload() }
     fun home() { beginNavigation(); webView.loadUrl(service.entry) }
