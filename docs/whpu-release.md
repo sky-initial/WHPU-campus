@@ -1,5 +1,9 @@
 # WHPU Pocket 发布与安装
 
+## v0.34.0-rc13（发布准备）
+
+`versionCode=112`，沿用正式签名，包含已合并的 PR #40：电费查询分组在手机横屏及大字体下可滚动，第三组按钮不再被压扁，关闭按钮保持可用。最终主线构建、正式 rc12 覆盖升级和附件回验完成后发布，检查范围见 [rc13 验收](whpu-rc13-validation.md)。
+
 ## v0.34.0-rc12
 
 `versionCode=111`，沿用正式签名。[已发布候选版](https://github.com/sky-initial/WHPU-campus/releases/tag/v0.34.0-rc12)，基于 PR #37 / #38 合入 main 的提交 `8dd8105` 构建。
