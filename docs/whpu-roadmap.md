@@ -62,6 +62,8 @@ PR #29 / #30 已合并，[rc9](https://github.com/sky-initial/WHPU-campus/releas
 
 PR #32 / #33 已合并，[rc10](https://github.com/sky-initial/WHPU-campus/releases/tag/v0.34.0-rc10) 已从 main `46d0c87` 发布，版本代码 109。最终主线重跑 582 项单元测试、完整 `lintRelease`、Release/R8、正式 rc9 覆盖升级及附件下载回验通过；旧缓存保留和新精确金额检查分别记录。正式准备包另完成系统桌面小组件的深浅色精确余额、负余额、点击和断网进程重建检查，与最终 main 的生产代码一致，详见 [rc10 发布验收](whpu-rc10-validation.md)。
 
+PR #34 / #35 已合并，[rc11](https://github.com/sky-initial/WHPU-campus/releases/tag/v0.34.0-rc11) 已从 main `859f293` 发布，版本代码 110。交付校园网页主页面错误提示及交接状态修复；功能提交 16 项离线设备回归通过，最终主线实际重跑 582 项单元测试、正式 rc10 覆盖升级和附件下载回验通过，详见 [rc11 发布验收](whpu-rc11-validation.md)。学校接口与真实认证状态的待办保持上表范围。
+
 学校接口受阻时继续其他模块，分别标记网页可用、原生完成、待核验。验证码/MFA、现场扫码及实际业务写入由用户操作。仅真实用户依赖阻塞按既有 Dot 通知安排处理，不假定自动双向通信。
 
 考试通知和本地备份恢复留到后续版本。总 GPA、均分和排名以学校规则为前提，现阶段只显示逐门官方绩点与学分绩点。保持现有工具链、单模块、MIT 版权和学校直连方式。
