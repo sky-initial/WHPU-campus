@@ -1,5 +1,6 @@
 ﻿package com.zzupocket.app.ui.schedule
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
@@ -72,6 +73,8 @@ import kotlin.math.roundToInt
  * 横线是节次、竖线是星期，所见即所得。双指缩放、拖动调整位置。
  */
 @OptIn(ExperimentalMaterial3Api::class)
+// The producer assigns value below; AGP 8.7.3 / Compose runtime 1.7.6 lint reports a false positive.
+@SuppressLint("ProduceStateDoesNotAssignValue")
 @Composable
 fun BackgroundCropScreen(
     sourceUri: Uri?,

@@ -122,9 +122,11 @@ class PomodoroService : Service() {
                         }
                         foregroundStarted = true
                     } else {
-                        runCatching {
+                        try {
                             NotificationManagerCompat.from(this@PomodoroService)
                                 .notify(PomodoroNotifications.NOTIF_ID_TIMER, notification)
+                        } catch (_: SecurityException) {
+                            // Keep the timer running if notification access was revoked.
                         }
                     }
                 }

@@ -133,7 +133,11 @@ class PomodoroNotifications(private val context: Context) {
      * 而番茄钟本身不该因为通知发不出去就崩 —— 所以吞掉。
      */
     private fun notifySafely(id: Int, notification: Notification) {
-        runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
+        try {
+            NotificationManagerCompat.from(context).notify(id, notification)
+        } catch (_: SecurityException) {
+            // Notification access can be revoked while the timer is running.
+        }
     }
 
     private fun openAppIntent(): PendingIntent {
