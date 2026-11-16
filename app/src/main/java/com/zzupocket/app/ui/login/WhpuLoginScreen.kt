@@ -19,6 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.zzupocket.app.core.AppGraph
@@ -36,11 +39,19 @@ import java.time.LocalDate
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Boolean = false, queryName: String = "成绩查询") {
+fun WhpuLoginScreen(
+    onBack: () -> Unit,
+    onImported: () -> Unit,
+    signInOnly: Boolean = false,
+    queryName: String = "成绩查询",
+    webViewFactory: (android.content.Context) -> WebView = { WebView(it) },
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var academicPage by remember { mutableStateOf(false) }
+    var pageError by remember { mutableStateOf<String?>(null) }
+    var pageErrorUrl by remember { mutableStateOf<String?>(null) }
     var host by remember { mutableStateOf("jwglxt.whpu.edu.cn") }
     var message by remember { mutableStateOf(if (signInOnly) "在下方学校页面完成登录，然后返回${queryName}并刷新。" else "先在下方学校页面登录，再点击“同步到课表”。导入成功后选择第一周日期。") }
     var busy by remember { mutableStateOf(false) }
@@ -56,6 +67,11 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
     var year by rememberSaveable { mutableIntStateOf(WhpuCalendar.today().let { if (it.monthValue >= 9) it.year else it.year - 1 }) }
     var termCode by rememberSaveable { mutableStateOf("3") }
     val term = WhpuTerm(year, termCode)
+    fun beginPageLoad() {
+        academicPage = false
+        pageError = null
+        pageErrorUrl = null
+    }
     fun startSync(replaceAccount: Boolean = false, legacyAccount: WhpuAccountId? = null) {
         val selectedTerm = term
         val view = webView ?: return
@@ -147,7 +163,7 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
         confirmButton = { TextButton(onClick = {
             confirmClearSession = false
             busy = true
-            academicPage = false
+            beginPageLoad()
             webView?.stopLoading()
             AppGraph.whpuSessionManager.clear()
             imported = false
@@ -196,12 +212,27 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                     Text("学校页面：$host", style = MaterialTheme.typography.labelSmall)
                     TextButton(enabled = !busy, onClick = {
                         message = "正在返回教务系统，已保留学校登录状态。"
+                        beginPageLoad()
                         webView?.loadUrl(WhpuWebPolicy.LOGIN)
                     }) { Text("返回教务") }
                 }
             }
+            pageError?.let { error ->
+                Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.heightIn(max = controlsMaxHeight).verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(error, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                        TextButton(enabled = !busy, onClick = {
+                            beginPageLoad()
+                            webView?.loadUrl(WhpuWebPolicy.LOGIN)
+                        }) { Text("重试") }
+                    }
+                }
+            }
             AndroidView(modifier = Modifier.fillMaxWidth().weight(1f), factory = { ctx ->
-                WebView(ctx).apply {
+                webViewFactory(ctx).apply {
                     webChromeClient = com.zzupocket.app.ui.web.SchoolWebChromeClient()
                     setBackgroundColor(android.graphics.Color.WHITE)
                     settings.javaScriptEnabled = true
@@ -215,15 +246,18 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                                 request.url.toString(), request.method, request.isForMainFrame,
                             )
                             if (secureReturn != null) {
-                                academicPage = false
+                                beginPageLoad()
                                 message = "正在通过 HTTPS 返回教务系统…"
                                 view.loadUrl(secureReturn)
                                 return true
                             }
                             val allowed = WhpuWebPolicy.allows(request.url.toString())
                             if (!allowed && request.isForMainFrame) {
-                                message = "登录跳转暂未支持：${WhpuWebPolicy.navigationOrigin(request.url.toString())}。可点击“返回教务”重试。"
+                                academicPage = false
+                                pageErrorUrl = request.url.toString()
+                                pageError = "登录跳转暂未支持：${WhpuWebPolicy.navigationOrigin(request.url.toString())}。已有缓存保留。"
                             }
+                            if (allowed && request.isForMainFrame) beginPageLoad()
                             return !allowed
                         }
                         override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
@@ -232,20 +266,30 @@ fun WhpuLoginScreen(onBack: () -> Unit, onImported: () -> Unit, signInOnly: Bool
                                 message = "学校页面已跳转，本次同步已取消，原缓存保留。"
                             }
                             academicPage = false
+                            // WebView can report a main-document HTTP error before onPageStarted.
+                            if (pageErrorUrl != url) { pageError = null; pageErrorUrl = null }
                             if (!WhpuWebPolicy.allows(url)) { view.stopLoading(); return }
                             host = android.net.Uri.parse(url).host.orEmpty()
                         }
                         override fun onPageFinished(view: WebView, url: String) {
-                            academicPage = WhpuWebPolicy.isAcademic(url)
+                            academicPage = pageError == null && url == view.url && WhpuWebPolicy.isAcademic(url)
                             if (academicPage && message == "正在通过 HTTPS 返回教务系统…") {
                                 message = if (signInOnly) "已返回教务页面。登录完成后返回${queryName}并刷新。" else "已返回教务页面。完成学校登录后点击“同步到课表”，导入成功后再设置日期。"
                             }
                         }
                         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                            if (request.isForMainFrame) message = "学校页面暂时无法加载，请检查网络后重新进入。"
+                            if (request.isForMainFrame) {
+                                academicPage = false
+                                pageErrorUrl = request.url.toString()
+                                pageError = "学校页面暂时无法加载，请稍后重试。已有缓存保留。"
+                            }
                         }
                         override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
-                            if (request.isForMainFrame) message = "学校页面返回 ${response.statusCode}，请稍后重新进入。"
+                            if (request.isForMainFrame) {
+                                academicPage = false
+                                pageErrorUrl = request.url.toString()
+                                pageError = "学校页面返回 ${response.statusCode}，请稍后重试。已有缓存保留。"
+                            }
                         }
                     }
                     webView = this
