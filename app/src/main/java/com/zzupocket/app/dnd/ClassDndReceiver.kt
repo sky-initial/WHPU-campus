@@ -12,7 +12,24 @@ class ClassDndReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
-            try { AppGraph.classDndController.refresh() } finally { pending.finish() }
+            try {
+                val controller = AppGraph.classDndController
+                when (intent.action) {
+                    ClassCountdownNotification.ACTION_HIDE ->
+                        intent.data?.lastPathSegment?.toLongOrNull()?.let { controller.hideReminder(it) }
+                    ClassCountdownNotification.ACTION_DISMISS -> {
+                        val parts = intent.data?.pathSegments.orEmpty()
+                        val start = parts.getOrNull(0)?.toLongOrNull()
+                        val deadline = parts.getOrNull(1)?.toLongOrNull()
+                        if (start != null && deadline != null && System.currentTimeMillis() < deadline) {
+                            controller.hideReminder(start)
+                        }
+                    }
+                    else -> controller.refresh()
+                }
+            } finally {
+                pending.finish()
+            }
         }
     }
 }

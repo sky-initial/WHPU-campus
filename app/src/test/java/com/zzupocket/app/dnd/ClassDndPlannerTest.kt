@@ -26,6 +26,20 @@ class ClassDndPlannerTest {
         val start = plan("2026-09-07T00:00:00Z")
         assertTrue(start.active); assertEquals(at("2026-09-07T01:40:00Z"), start.nextBoundary)
     }
+
+    @Test fun countdownChangesAtStartAndClearsAtEnd() {
+        val before = at("2026-09-06T23:49:59Z")
+        val lesson = plan(before.toString()).nextClass(before)!!
+        assertEquals(at("2026-09-06T23:50:00Z"), lesson.reminderStart())
+        assertNull(lesson.countdownAt(before))
+        val upcoming = lesson.countdownAt(lesson.reminderStart())!!
+        assertFalse(upcoming.inClass)
+        assertEquals(lesson.start, upcoming.deadline)
+        val ongoing = lesson.countdownAt(lesson.start)!!
+        assertTrue(ongoing.inClass)
+        assertEquals(lesson.end, ongoing.deadline)
+        assertNull(lesson.countdownAt(lesson.end))
+    }
     @Test fun endsAtClassEndAndDoesNotStayActiveAfterTerm() {
         assertFalse(plan("2026-09-07T01:40:00Z").active)
         assertNull(plan("2027-01-01T00:00:00Z").nextBoundary)

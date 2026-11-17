@@ -10,6 +10,7 @@
     <!-- 番茄钟：倒计时通知 + 走完时的提醒。
          没有 POST_NOTIFICATIONS（Android 13+）时前台服务仍然能跑，但通知不可见。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />

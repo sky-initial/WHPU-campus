@@ -13,6 +13,20 @@ import java.time.LocalTime
 data class ClassInterval(val start: Instant, val end: Instant)
 data class ClassDndPlan(val active: Boolean, val nextBoundary: Instant?, val intervals: List<ClassInterval>)
 
+internal data class ClassCountdown(val lesson: ClassInterval, val inClass: Boolean) {
+    val deadline: Instant get() = if (inClass) lesson.end else lesson.start
+}
+
+internal const val CLASS_REMINDER_LEAD_MINUTES = 10L
+
+internal fun ClassInterval.reminderStart(): Instant = start.minusSeconds(CLASS_REMINDER_LEAD_MINUTES * 60)
+
+internal fun ClassDndPlan.nextClass(now: Instant): ClassInterval? =
+    intervals.firstOrNull { now < it.end }
+
+internal fun ClassInterval.countdownAt(now: Instant): ClassCountdown? =
+    if (now < reminderStart() || now >= end) null else ClassCountdown(this, now >= start)
+
 object ClassDndPlanner {
     fun plan(semesterId: Int?, settings: WeekSettings, sessions: List<Session>, periods: List<Period>, now: Instant): ClassDndPlan {
         val firstDay = settings.weekOneStart
