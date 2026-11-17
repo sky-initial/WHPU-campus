@@ -242,7 +242,7 @@ fun AppNav(initialRoute: String? = null, routeToken: Int = 0) {
                         TextButton(onClick = { navController.navigate(ROUTE_LOGIN) }) { Text("学校登录与课表同步") }
                         TextButton(onClick = { navController.navigate(ROUTE_GRADES) }) { Text("成绩查询") }
                         TextButton(onClick = { navController.navigate(ROUTE_EXAMS) }) { Text("考试安排") }
-                        TextButton(onClick = { navController.navigate(AppRoutes.CLASS_DND) }) { Text("上课免打扰") }
+                        TextButton(onClick = { navController.navigate(AppRoutes.CLASS_DND) }) { Text("上课免打扰与提醒") }
                         TextButton(onClick = { navController.navigate(ROUTE_CARD) }) { Text("校园卡") }
                         TextButton(onClick = { navController.navigate(ROUTE_ELECTRICITY) }) { Text("宿舍电费") }
                         TextButton(onClick = { navController.navigate(ROUTE_LIBRARY) }) { Text("图书馆") }
