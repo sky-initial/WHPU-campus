@@ -2,7 +2,7 @@ package com.zzupocket.app.data.whpu
 
 /** Parses the week expressions returned by the WHPU timetable. */
 object WeekParser {
-    private val segment = Regex("^(\\d+)(?:\\s*[-~－—]\\s*(\\d+))?\\s*周?\\s*(?:[（(]\\s*(单|双)\\s*[）)])?$")
+    private val segment = Regex("^(?:第\\s*)?(\\d+)(?:\\s*[-~－—]\\s*(\\d+))?\\s*周?\\s*(?:[（(]\\s*(单|双)\\s*[）)])?$")
 
     fun parse(value: String): Set<Int> {
         if (value.isBlank()) return emptySet()

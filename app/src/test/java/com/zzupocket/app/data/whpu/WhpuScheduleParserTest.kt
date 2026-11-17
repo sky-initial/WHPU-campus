@@ -22,6 +22,16 @@ class WhpuScheduleParserTest {
         assertEquals(emptyList<WhpuCourse>(), WhpuScheduleParser.parse("""{"kbList":[]}""").courses)
     }
 
+    @Test fun parsesWeekPrefixInRegularAndPracticeRows() {
+        val result = WhpuScheduleParser.parse("""
+            {"kbList":[{"kcmc":"示例课程","xqj":1,"jcs":"1-2","zcd":"第9周"}],
+             "sjkList":[{"kcmc":"示例实践","qsjsz":"第16周"}]}
+        """.trimIndent())
+
+        assertEquals(setOf(9), result.courses.single().weeks)
+        assertEquals(setOf(16), result.practice.single().weeks)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun missingScheduleIsInvalid() { WhpuScheduleParser.parse("{}") }
 
